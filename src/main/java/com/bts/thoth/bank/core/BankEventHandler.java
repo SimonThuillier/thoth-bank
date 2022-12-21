@@ -1,14 +1,14 @@
-package com.bts.thoth.bank;
+package com.bts.thoth.bank.core;
 
 import java.math.BigDecimal;
 
 import io.vavr.control.Option;
 import fr.maif.eventsourcing.EventHandler;
 
-import com.bts.thoth.bank.BankEvent.AccountClosed;
-import com.bts.thoth.bank.BankEvent.AccountOpened;
-import com.bts.thoth.bank.BankEvent.MoneyDeposited;
-import com.bts.thoth.bank.BankEvent.MoneyWithdrawn;
+import com.bts.thoth.bank.core.BankEvent.AccountClosed;
+import com.bts.thoth.bank.core.BankEvent.AccountOpened;
+import com.bts.thoth.bank.core.BankEvent.MoneyDeposited;
+import com.bts.thoth.bank.core.BankEvent.MoneyWithdrawn;
 
 public class BankEventHandler implements EventHandler<Account, BankEvent> {
     @Override

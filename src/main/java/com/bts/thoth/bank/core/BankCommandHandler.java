@@ -1,10 +1,14 @@
-package com.bts.thoth.bank;
+package com.bts.thoth.bank.core;
 
 import java.math.BigDecimal;
 
 import static io.vavr.API.Left;
 import static io.vavr.API.List;
 import static io.vavr.API.Right;
+
+import com.bts.thoth.bank.core.Account;
+import com.bts.thoth.bank.core.BankCommand;
+import com.bts.thoth.bank.core.BankEvent;
 import io.vavr.Tuple0;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
@@ -15,10 +19,10 @@ import fr.maif.eventsourcing.ReactorCommandHandler;
 import fr.maif.jooq.reactor.PgAsyncTransaction;
 
 import com.bts.logging.AppLogger;
-import com.bts.thoth.bank.BankCommand.CloseAccount;
-import com.bts.thoth.bank.BankCommand.Deposit;
-import com.bts.thoth.bank.BankCommand.OpenAccount;
-import com.bts.thoth.bank.BankCommand.Withdraw;
+import com.bts.thoth.bank.core.BankCommand.CloseAccount;
+import com.bts.thoth.bank.core.BankCommand.Deposit;
+import com.bts.thoth.bank.core.BankCommand.OpenAccount;
+import com.bts.thoth.bank.core.BankCommand.Withdraw;
 
 public class BankCommandHandler implements ReactorCommandHandler<String, Account, BankCommand, BankEvent, Tuple0, PgAsyncTransaction> {
     @Override

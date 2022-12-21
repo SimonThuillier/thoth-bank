@@ -1,7 +1,9 @@
 package com.bts.thoth.bank;
 
+import com.bts.thoth.bank.core.Account;
+import com.bts.thoth.bank.core.BankCommandHandler;
+import com.bts.thoth.bank.core.BankEventHandler;
 import io.vavr.control.Either;
-import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import com.bts.logging.AppLogger;
@@ -30,9 +32,11 @@ public class DemoApplication {
 								.fold(
 										error -> Mono.just(Either.<String, Account>left(error)),
 										currentState -> {
-											String id = currentState.id;
+											//String id = currentState.id;
+											String id = "lolilol";
+
 											println("account created with id "+id);
-											return bank.withdraw(id, BigDecimal.valueOf(50))
+											return bank.withdraw(id, BigDecimal.valueOf(500))
 													.map(withDrawProcessingResult -> withDrawProcessingResult.map(Account::getBalance))
 													.doOnSuccess(balanceOrError ->
 															balanceOrError
@@ -40,7 +44,7 @@ public class DemoApplication {
 																	.orElseRun(error -> println("Error: " + error))
 													)
 													.flatMap(balanceOrError ->
-															bank.deposit(id, BigDecimal.valueOf(100))
+															bank.deposit(id, BigDecimal.valueOf(10))
 													)
 													.map(depositProcessingResult -> depositProcessingResult.map(Account::getBalance))
 													.doOnSuccess(balanceOrError ->

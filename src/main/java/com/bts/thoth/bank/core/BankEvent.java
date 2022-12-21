@@ -1,4 +1,4 @@
-package com.bts.thoth.bank;
+package com.bts.thoth.bank.core;
 
 import java.math.BigDecimal;
 

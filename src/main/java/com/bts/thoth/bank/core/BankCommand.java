@@ -1,7 +1,6 @@
-package com.bts.thoth.bank;
+package com.bts.thoth.bank.core;
 
 import fr.maif.eventsourcing.SimpleCommand;
-import io.vavr.API.Match.Pattern0;
 import io.vavr.Lazy;
 
 import java.math.BigDecimal;

@@ -4,6 +4,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.math.BigDecimal;
 
+import com.bts.thoth.bank.core.*;
 import io.github.cdimascio.dotenv.Dotenv;
 import com.fasterxml.uuid.Generators;
 import com.fasterxml.uuid.impl.TimeBasedGenerator;
@@ -75,7 +76,7 @@ public class Bank implements Closeable {
     public Bank(BankCommandHandler commandHandler, BankEventHandler eventHandler) {
         this.vertx = Vertx.vertx();
         this.pgAsyncPool = pgAsyncPool(vertx);
-        // this.withdrawByMonthProjection = new WithdrawByMonthProjection(pgAsyncPool);
+        //this.withdrawByMonthProjection = new WithdrawByMonthProjection(pgAsyncPool);
 
         this.eventProcessor = ReactiveEventProcessor
                 .withPgAsyncPool(pgAsyncPool)

@@ -1,6 +1,6 @@
-package com.bts.thoth.bank;
+package com.bts.thoth.bank.core;
 
-import com.bts.thoth.bank.BankEvent.*;
+import com.bts.thoth.bank.core.BankEvent.*;
 import fr.maif.eventsourcing.Type;
 import fr.maif.json.EventEnvelopeJsonFormat;
 import fr.maif.json.JsonRead;
