@@ -1,16 +1,33 @@
 package com.bts.thoth.bank;
 
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+
+import com.bts.thoth.bank.core.Account;
+import com.bts.thoth.bank.core.BankCommandHandler;
+import com.bts.thoth.bank.core.BankEventHandler;
+import io.vavr.Tuple;
+import io.vavr.Tuple0;
+import io.vavr.control.Either;
 import io.vavr.control.Option;
 
 import static io.vavr.API.*;
 import static io.vavr.Predicates.*;
+import static java.lang.Thread.sleep;
+
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import static io.vavr.API.run;
 
 import java.util.Scanner;
 
@@ -54,8 +71,23 @@ public class BankCliApplication
 
     private Option<String> selectedAccountId = Option.none();
 
+    static BankCommandHandler commandHandler = new BankCommandHandler();
+    static BankEventHandler eventHandler = new BankEventHandler();
+    static Bank bank = new Bank(commandHandler, eventHandler);
+
     public static void main(String[] args) {
         LOG.info("STARTING THE APPLICATION");
+
+        Disposable task = bank
+                .init()
+                .doOnError(Throwable::printStackTrace)
+                .doOnTerminate(() -> {
+                    LOG.info("Thoth bank backend successfully initialized");
+                })
+                .subscribe();
+
+        while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
+
         SpringApplication.run(BankCliApplication.class, args);
         LOG.info("APPLICATION FINISHED");
     }
@@ -75,59 +107,172 @@ public class BankCliApplication
         // case not empty inAccount
     }
 
-    public void createNewAccount(){
-        System.out.println("1");
-    }
-
     private void runPrimaryMenu(){
 
-        Integer result = 0;
+        int selectedAction = 0;
         System.out.println(menuText);
-        System.out.print("Type a choice and enter to validate: ");
         Scanner sc= new Scanner(System.in);
-        Option<String> input = Option.of(sc.nextLine().trim()); //reads string.
+        String input;
+        Pattern actionPattern = Pattern.compile("^([1-3])$");
+        Matcher actionMatcher;
 
-        //System.out.println("Invalid input. Please enter a valid action number.");
+        while (selectedAction != 3){
+            if(selectedAction != -1){
+                System.out.print("Type a choice and enter to validate: ");
+            }
+            else {
+                System.out.print("Invalid input. Please enter a valid action number: ");
+            }
 
-        while (result <= 0){
-            input = Option.of(sc.nextLine().trim()); //reads string.
+            selectedAction = -1;
+            input = sc.nextLine().trim();
+            actionMatcher = actionPattern.matcher(input);
+            if (actionMatcher.matches()){
+                selectedAction = Integer.parseInt(actionMatcher.group(1));
+            }
 
-            result = Match(input).of(
-                    Case($(instanceOf(Integer.class)), Integer::valueOf),
-                    Case($(), o -> -1)
-            );
-            result = Match(Option.of(result)).of(
-                    Case($(isIn(1, 2 , 3)), o -> o),
-                    Case($(), o -> -1)
-            );
+            switch(selectedAction){
+                case 1:
+                    this.createNewAccount();
+                    int accountMenuAction = this.runAccountMenu();
+                    if(accountMenuAction == 7){
+                        // since in account menu action user chose to exit the application
+                        selectedAction = 3;
+                        break;
+                    }
+                    System.out.println("--> back to main menu -->");
+                    selectedAction = 0;
+                    System.out.println(menuText);
+                    break;
+                case 2:
+                    // this.setAccount();
+                    selectedAction = 0;
+                    break;
+                case 3:
+                    // main menu loop will exit
+                    break;
+                case -1:
+                    break;
+            }
+        }
 
-            if(result == -1){
-                System.out.println("Invalid input. Please enter a valid action number.");
+        try {
+            bank.close();
+            LOG.info("Thoth bank backend successfully closed.");
+        } catch (IOException e) {
+            LOG.warn("Error closing Thoth bank backend : ", e);
+        }
+
+        System.out.println("Goodbye !");
+    }
+
+    private int runAccountMenu(){
+
+        // by security this menu can be executed only if selectedAccountId is set
+        if (selectedAccountId.isEmpty()){
+            return 0;
+        }
+
+        int selectedAction = 0;
+        System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get().toString()));
+        Scanner sc= new Scanner(System.in);
+        String input;
+        Pattern actionPattern = Pattern.compile("^([1-7])$");
+        Matcher actionMatcher;
+
+        while (selectedAction != 6 && selectedAction != 7){
+            if(selectedAction != -1){
+                System.out.print("Type a choice and enter to validate: ");
+            }
+            else {
+                System.out.print("Invalid input. Please enter a valid action number: ");
+            }
+
+            selectedAction = -1;
+            input = sc.nextLine().trim();
+            actionMatcher = actionPattern.matcher(input);
+            if (actionMatcher.matches()){
+                selectedAction = Integer.parseInt(actionMatcher.group(1));
+            }
+
+            switch(selectedAction){
+                case 1:
+                    this.createNewAccount();
+                    selectedAction = 0;
+                    System.out.println(menuText);
+                    break;
+                case 6, 7:
+                    selectedAccountId = Option.none();
+                    // account menu loop will exit
+                    break;
+                case -1:
+                    break;
             }
 
 
         }
+        return selectedAction;
+    }
 
 
 
-//        if(result)
-//
-//        result = Match(Option.of(result)).of(
-//                Case($(is(1)), o -> io.vavr.API.run(() -> {
-//                    System.out.println("run create");
-//                })),
-//                Case($(is(2)), o -> io.vavr.API.run(() -> {
-//                    System.out.println("run set account");
-//                })),
-//                Case($(is(3)), o -> io.vavr.API.run(() -> {
-//                    System.out.println("run exit app");
-//                })),
-//                Case($(), d -> -1)
-//        );
+    public void createNewAccount(){
+
+        BigDecimal initialDeposit = BigDecimal.valueOf(-1);
+        Scanner sc= new Scanner(System.in);
+        String input;
 
 
+        System.out.println("You will begin a new account creation process. Type 'cancel' and enter at any moment to cancel.");
+        System.out.print("Type an initial deposit (ex 10.5) and enter to validate: ");
+        while (initialDeposit.compareTo(BigDecimal.ZERO) <= 0) {
+            input = sc.nextLine().trim();
+            if(input.equalsIgnoreCase("CANCEL")){
+                return;
+            }
 
+            Pattern amountPattern = Pattern.compile("^\\d+(\\.\\d+)?$");
+            Matcher amountMatcher = amountPattern.matcher(input);
+            if (!amountMatcher.matches()){
+                System.out.print("Invalid amount. Please enter a valid amount (ex 10.5): ");
+                continue;
+            }
+            initialDeposit = BigDecimal.valueOf(Double.parseDouble(input));
+            if (initialDeposit.compareTo(BigDecimal.ZERO) <= 0){
+                System.out.print("Amount must be strictly superior to 0: ");
+                continue;
+            }
+        }
 
+        System.out.print("Creating new account...");
 
+        final boolean taskDone = false;
+
+        BigDecimal finalInitialDeposit = initialDeposit;
+        Disposable task = Mono.
+                from(Flux.range(0, 1))
+                .flatMap(__ -> bank.createAccount(finalInitialDeposit))
+                .flatMap(accountCreatedOrError ->
+                         accountCreatedOrError
+                                .fold(
+                                        error -> Mono.just(Either.<String, Account>left(error)),
+                                        currentState -> {
+                                            selectedAccountId = Option.some(currentState.id);
+                                            return Mono.empty();
+                                        }
+                                )
+                )
+                .doOnError(Throwable::printStackTrace)
+                .doOnTerminate(() -> {
+                    System.out.println("successfully done !");
+                    System.out.println("Account " + selectedAccountId + " created.");
+                })
+                .subscribe();
+
+        while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
+    }
+
+    private void setAccount(){
+        System.out.println("Set account");
     }
 }
