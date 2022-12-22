@@ -216,39 +216,17 @@ public class BankCliApplication
 
 
 
-    public void createNewAccount(){
-
-        BigDecimal initialDeposit = BigDecimal.valueOf(-1);
-        Scanner sc= new Scanner(System.in);
-        String input;
-
+    private void createNewAccount(){
 
         System.out.println("You will begin a new account creation process. Type 'cancel' and enter at any moment to cancel.");
         System.out.print("Type an initial deposit (ex 10.5) and enter to validate: ");
-        while (initialDeposit.compareTo(BigDecimal.ZERO) <= 0) {
-            input = sc.nextLine().trim();
-            if(input.equalsIgnoreCase("CANCEL")){
-                return;
-            }
 
-            Pattern amountPattern = Pattern.compile("^\\d+(\\.\\d+)?$");
-            Matcher amountMatcher = amountPattern.matcher(input);
-            if (!amountMatcher.matches()){
-                System.out.print("Invalid amount. Please enter a valid amount (ex 10.5): ");
-                continue;
-            }
-            initialDeposit = BigDecimal.valueOf(Double.parseDouble(input));
-            if (initialDeposit.compareTo(BigDecimal.ZERO) <= 0){
-                System.out.print("Amount must be strictly superior to 0: ");
-                continue;
-            }
-        }
+        Option<BigDecimal> initialDeposit = requestPositiveAmountOrCancel();
+        if(initialDeposit.isEmpty()){return;} // action was canceled
 
+        BigDecimal finalInitialDeposit = initialDeposit.get();
         System.out.print("Creating new account...");
 
-        final boolean taskDone = false;
-
-        BigDecimal finalInitialDeposit = initialDeposit;
         Disposable task = Mono.
                 from(Flux.range(0, 1))
                 .flatMap(__ -> bank.createAccount(finalInitialDeposit))
@@ -270,6 +248,123 @@ public class BankCliApplication
                 .subscribe();
 
         while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
+    }
+
+    private void deposit(){
+
+        System.out.print("Type amount to deposit (ex 10.5) or 'cancel' to abort, and enter to validate: ");
+
+        Option<BigDecimal> deposit = requestPositiveAmountOrCancel();
+        if(deposit.isEmpty()){return;} // action was canceled
+
+        BigDecimal finalDeposit = deposit.get();
+        System.out.print("Depositing..");
+
+        Disposable task = Mono.
+                from(Flux.range(0, 1))
+                .flatMap(__ -> bank.deposit(selectedAccountId.get(), finalDeposit))
+                .doOnError(Throwable::printStackTrace)
+                .doOnTerminate(() -> {
+                    System.out.println("successfully done !");
+                    System.out.println(finalDeposit + "$  deposited on account " + selectedAccountId + ".");
+                })
+                .subscribe();
+
+        while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
+    }
+
+    private void withdraw(){
+
+        System.out.print("Type amount to withdraw (ex 10.5) or 'cancel' to abort, and enter to validate: ");
+
+        Option<BigDecimal> withdraw = requestPositiveAmountOrCancel();
+        if(withdraw.isEmpty()){return;} // action was cancelled
+
+        BigDecimal finalWithdraw = withdraw.get();
+        System.out.print("Depositing..");
+
+        Disposable task = Mono.
+                from(Flux.range(0, 1))
+                .flatMap(__ -> bank.deposit(selectedAccountId.get(), finalWithdraw))
+                .doOnError(Throwable::printStackTrace)
+                .doOnTerminate(() -> {
+                    System.out.println("successfully done !");
+                    System.out.println(finalWithdraw + "$  deposited on account " + selectedAccountId + ".");
+                })
+                .subscribe();
+
+        while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
+    }
+
+    private void close(){
+
+        System.out.print("You will close definitely account " + selectedAccountId + ". Are you sure ? (type 'yes' or 'cancel' : ");
+
+        Option<String> response = requestYesOrCancel();
+        if(response.isEmpty()){return;} // action was cancelled
+
+        System.out.print("Closing..");
+
+        Disposable task = Mono.
+                from(Flux.range(0, 1))
+                .flatMap(__ -> bank.close(selectedAccountId.get()))
+                .doOnError(Throwable::printStackTrace)
+                .doOnTerminate(() -> {
+                    System.out.println("successfully done !");
+                    System.out.println("Account " + selectedAccountId + " was closed.");
+                })
+                .subscribe();
+
+        while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
+    }
+
+    private Option<BigDecimal> requestPositiveAmountOrCancel(){
+
+        Option<BigDecimal> initialDeposit = Option.none();
+        Scanner sc= new Scanner(System.in);
+        String input;
+
+        while (initialDeposit.isEmpty()) {
+            input = sc.nextLine().trim();
+            if(input.equalsIgnoreCase("CANCEL")){
+                return initialDeposit; // which means : to abort ongoing action
+            }
+
+            Pattern amountPattern = Pattern.compile("^\\d+(\\.\\d+)?$");
+            Matcher amountMatcher = amountPattern.matcher(input);
+            if (!amountMatcher.matches()){
+                System.out.print("Invalid amount. Please enter a valid amount (ex 10.5): ");
+                continue;
+            }
+            if (BigDecimal.valueOf(Double.parseDouble(input)).compareTo(BigDecimal.ZERO) <= 0){
+                System.out.print("Amount must be strictly superior to 0: ");
+                continue;
+            }
+            // if entry is ok
+            initialDeposit = Option.some(BigDecimal.valueOf(Double.parseDouble(input)));
+        }
+        return initialDeposit;
+    }
+
+    private Option<String> requestYesOrCancel(){
+
+        Option<String> response = Option.none();
+        Scanner sc= new Scanner(System.in);
+        String input;
+
+        while (response.isEmpty()) {
+            input = sc.nextLine().trim();
+            if(input.equalsIgnoreCase("CANCEL")){
+                return response; // which means : to abort ongoing action
+            }
+            if(input.equalsIgnoreCase("YES")){
+                response = Option.some("YES");
+                return response;
+            }
+            // invalid answer
+            System.out.print("Please type 'cancel' or 'yes': ");
+        }
+        return response;
     }
 
     private void setAccount(){
