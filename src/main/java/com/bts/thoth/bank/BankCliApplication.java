@@ -4,6 +4,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
@@ -12,6 +14,7 @@ import com.bts.thoth.bank.core.BankCommandHandler;
 import com.bts.thoth.bank.core.BankEventHandler;
 import io.vavr.Tuple;
 import io.vavr.Tuple0;
+import io.vavr.collection.List;
 import io.vavr.control.Either;
 import io.vavr.control.Option;
 
@@ -116,6 +119,8 @@ public class BankCliApplication
         Pattern actionPattern = Pattern.compile("^([1-3])$");
         Matcher actionMatcher;
 
+        int accountMenuAction;
+
         while (selectedAction != 3){
             if(selectedAction != -1){
                 System.out.print("Type a choice and enter to validate: ");
@@ -134,7 +139,7 @@ public class BankCliApplication
             switch(selectedAction){
                 case 1:
                     this.createNewAccount();
-                    int accountMenuAction = this.runAccountMenu();
+                    accountMenuAction = this.runAccountMenu();
                     if(accountMenuAction == 7){
                         // since in account menu action user chose to exit the application
                         selectedAction = 3;
@@ -145,7 +150,18 @@ public class BankCliApplication
                     System.out.println(menuText);
                     break;
                 case 2:
-                    // this.setAccount();
+                    if(this.setAccount()){
+                        accountMenuAction = this.runAccountMenu();
+                        if(accountMenuAction == 7){
+                            // since in account menu action user chose to exit the application
+                            selectedAction = 3;
+                            break;
+                        }
+                        System.out.println("--> back to main menu -->");
+                        selectedAction = 0;
+                        System.out.println(menuText);
+                        break;
+                    }
                     selectedAction = 0;
                     break;
                 case 3:
@@ -174,13 +190,13 @@ public class BankCliApplication
         }
 
         int selectedAction = 0;
-        System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get().toString()));
+        System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
         Scanner sc= new Scanner(System.in);
         String input;
         Pattern actionPattern = Pattern.compile("^([1-7])$");
         Matcher actionMatcher;
 
-        while (selectedAction != 6 && selectedAction != 7){
+        while (selectedAction != 6 && selectedAction != 7 && selectedAccountId.isDefined()){
             if(selectedAction != -1){
                 System.out.print("Type a choice and enter to validate: ");
             }
@@ -197,9 +213,35 @@ public class BankCliApplication
 
             switch(selectedAction){
                 case 1:
-                    this.createNewAccount();
+                    this.deposit();
                     selectedAction = 0;
-                    System.out.println(menuText);
+                    System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
+                    break;
+                case 2:
+                    this.withdraw();
+                    selectedAction = 0;
+                    System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
+                    break;
+                case 3:
+                    this.getAccountInfo();
+                    selectedAction = 0;
+                    System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
+                    break;
+                case 4:
+                    // TODO get history
+                    selectedAction = 0;
+                    System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
+                    break;
+                case 5:
+                    if(this.close()){
+                        // with account closed we exit it
+                        selectedAction = 6;
+                        selectedAccountId = Option.none();
+                    }
+                    else {
+                        selectedAction = 0;
+                        System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
+                    }
                     break;
                 case 6, 7:
                     selectedAccountId = Option.none();
@@ -250,6 +292,19 @@ public class BankCliApplication
         while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
     }
 
+    private boolean setAccount(){
+
+        System.out.print("Type account ID to set or 'cancel' and enter to validate: ");
+
+        Option<String> accountId = requestChoicesOrCancel(Option.none());
+        if(accountId.isEmpty()){return false;} // action was canceled
+
+        // TODO : request backend to see if this accountId exists
+
+        selectedAccountId = accountId;
+        return true;
+    }
+
     private void deposit(){
 
         System.out.print("Type amount to deposit (ex 10.5) or 'cancel' to abort, and enter to validate: ");
@@ -266,7 +321,7 @@ public class BankCliApplication
                 .doOnError(Throwable::printStackTrace)
                 .doOnTerminate(() -> {
                     System.out.println("successfully done !");
-                    System.out.println(finalDeposit + "$  deposited on account " + selectedAccountId + ".");
+                    System.out.println(finalDeposit + " deposited on account " + selectedAccountId.get() + ".");
                 })
                 .subscribe();
 
@@ -281,29 +336,75 @@ public class BankCliApplication
         if(withdraw.isEmpty()){return;} // action was cancelled
 
         BigDecimal finalWithdraw = withdraw.get();
-        System.out.print("Depositing..");
+        System.out.print("Withdrawing...");
 
         Disposable task = Mono.
                 from(Flux.range(0, 1))
-                .flatMap(__ -> bank.deposit(selectedAccountId.get(), finalWithdraw))
+                .flatMap(__ -> bank.withdraw(selectedAccountId.get(), finalWithdraw))
+                .flatMap(errorOrState ->
+                        errorOrState
+                                .fold(
+                                        (e) -> {
+                                            println("ERROR : " + e);
+                                            return Mono.from(Flux.range(0, 0));
+                                        },
+                                        account -> {
+                                            System.out.println("successfully done !");
+                                            System.out.println("New balance is: " + account.getBalance());
+                                            return Mono.from(Flux.range(0, 0));
+                                        }
+                                )
+                )
                 .doOnError(Throwable::printStackTrace)
-                .doOnTerminate(() -> {
-                    System.out.println("successfully done !");
-                    System.out.println(finalWithdraw + "$  deposited on account " + selectedAccountId + ".");
-                })
                 .subscribe();
 
         while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
     }
 
-    private void close(){
+    private void getAccountInfo(){
 
-        System.out.print("You will close definitely account " + selectedAccountId + ". Are you sure ? (type 'yes' or 'cancel' : ");
+        Disposable task = Mono.
+                from(Flux.range(0, 1))
+                .flatMap(__ -> bank.findAccountById(selectedAccountId.get()))
+                .doOnSuccess(statesOrError ->
 
-        Option<String> response = requestYesOrCancel();
-        if(response.isEmpty()){return;} // action was cancelled
+                        statesOrError.fold(
+                                () -> {
+                                    println("ERROR : no opened account with ID " + selectedAccountId.get());
+                                    return Mono.from(Flux.range(0, 0));
+                                },
+                                account -> {
+                                    print("""
+                                    ################################################
+                                    Current informations for account <account.id>
+                                    ################################################
+                                    """.replaceFirst("<account.id>", account.getId()));
+
+                                    println("Account balance: " + account.getBalance() );
+                                    println("Sequence number: " + account.getSequenceNum() );
+                                    println("________________________________________________");
+                                    return null;
+                                }
+                        )
+                        )
+                .doOnError(Throwable::printStackTrace)
+                .subscribe();
+
+        while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
+    }
+
+    private boolean close(){
+
+        System.out.print("You will close definitely account " + selectedAccountId.get() + ". Are you sure ? (type 'yes' or 'cancel'): ");
+
+        Option<String> response = requestChoicesOrCancel(Option.some(List.of("yes")));
+        if(response.isEmpty()){return false;} // action was cancelled
 
         System.out.print("Closing..");
+
+        // since lambda in generate should not update outer-scope objects to prevent side effects
+        // we will put validation var in the hashmap behind and update it in lambda
+        Map<String, Boolean> resultStorage = new HashMap<String, Boolean>();
 
         Disposable task = Mono.
                 from(Flux.range(0, 1))
@@ -311,11 +412,13 @@ public class BankCliApplication
                 .doOnError(Throwable::printStackTrace)
                 .doOnTerminate(() -> {
                     System.out.println("successfully done !");
-                    System.out.println("Account " + selectedAccountId + " was closed.");
+                    resultStorage.put("accountClosed", true);
+                    System.out.println("Account " + selectedAccountId.get() + " was closed.");
                 })
                 .subscribe();
 
         while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
+        return resultStorage.containsKey("accountClosed");
     }
 
     private Option<BigDecimal> requestPositiveAmountOrCancel(){
@@ -346,7 +449,7 @@ public class BankCliApplication
         return initialDeposit;
     }
 
-    private Option<String> requestYesOrCancel(){
+    private Option<String> requestChoicesOrCancel(Option<List<String>> choices){
 
         Option<String> response = Option.none();
         Scanner sc= new Scanner(System.in);
@@ -357,17 +460,20 @@ public class BankCliApplication
             if(input.equalsIgnoreCase("CANCEL")){
                 return response; // which means : to abort ongoing action
             }
-            if(input.equalsIgnoreCase("YES")){
-                response = Option.some("YES");
+            if (choices.isEmpty()){
+                response = Option.some(input);
                 return response;
             }
+            // case with choices defined
+            for(String choice: choices.get()){
+                if(input.equalsIgnoreCase(choice)){
+                    // first input matching choice is returned
+                    return Option.some(choice);
+                }
+            }
             // invalid answer
-            System.out.print("Please type 'cancel' or 'yes': ");
+            System.out.print("Please type 'cancel' or ["+ choices.get().mkString("'","|","'") +"] : ");
         }
         return response;
-    }
-
-    private void setAccount(){
-        System.out.println("Set account");
     }
 }
