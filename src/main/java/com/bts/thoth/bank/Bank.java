@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 
 import com.bts.thoth.bank.core.*;
+import fr.maif.eventsourcing.*;
 import io.github.cdimascio.dotenv.Dotenv;
 import com.fasterxml.uuid.Generators;
 import com.fasterxml.uuid.impl.TimeBasedGenerator;
@@ -25,11 +26,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.kafka.sender.SenderOptions;
 
-import fr.maif.eventsourcing.EventEnvelope;
-import fr.maif.eventsourcing.ProcessingSuccess;
-import fr.maif.eventsourcing.ReactiveEventProcessor;
-import fr.maif.eventsourcing.ReactorEventProcessor;
-import fr.maif.eventsourcing.TableNames;
 import fr.maif.jooq.reactor.PgAsyncPool;
 import fr.maif.jooq.reactor.PgAsyncTransaction;
 import fr.maif.kafka.JsonFormatSerDer;
@@ -67,16 +63,20 @@ public class Bank implements Closeable {
     private final String SEQUENCE = """
                     CREATE SEQUENCE if not exists bank_sequence_num;
             """;
-    private final PgAsyncPool pgAsyncPool;
-    private final Vertx vertx;
+
+    private final PgAsyncPool projectionPgAsyncPool;
     private PgPool pgPool;
+    private final Vertx vertx;
+    private final PgAsyncPool pgAsyncPool; // event store projection
+    private PgPool projectionPgPool;
     private final ReactorEventProcessor<String, Account, BankCommand, BankEvent, PgAsyncTransaction, Tuple0, Tuple0, Tuple0> eventProcessor;
-    // private final WithdrawByMonthProjection withdrawByMonthProjection;
+    private final WithdrawByMonthProjection withdrawByMonthProjection;
 
     public Bank(BankCommandHandler commandHandler, BankEventHandler eventHandler) {
         this.vertx = Vertx.vertx();
         this.pgAsyncPool = pgAsyncPool(vertx);
-        //this.withdrawByMonthProjection = new WithdrawByMonthProjection(pgAsyncPool);
+        this.projectionPgAsyncPool = projectionPgAsyncPool(vertx);
+        this.withdrawByMonthProjection = new WithdrawByMonthProjection(projectionPgAsyncPool);
 
         this.eventProcessor = ReactiveEventProcessor
                 .withPgAsyncPool(pgAsyncPool)
@@ -89,10 +89,8 @@ public class Bank implements Closeable {
                 .withEventHandler(eventHandler)
                 .withDefaultAggregateStore()
                 .withCommandHandler(commandHandler)
-                .withProjections()
+                .withProjections(this.withdrawByMonthProjection)
                 .build();
-        //.withProjections(this.withdrawByMonthProjection)
-        //
     }
 
     public Mono<Tuple0> init() {
@@ -105,14 +103,16 @@ public class Bank implements Closeable {
                     println("Database initialization failed");
                     e.printStackTrace();
                 })
-                // .flatMap(__ -> withdrawByMonthProjection.init())
+                .flatMap(__ -> withdrawByMonthProjection.init())
                 .thenReturn(Tuple.empty());
     }
 
     @Override
     public void close() throws IOException {
         this.pgPool.close();
+        this.projectionPgPool.close();
         this.vertx.close();
+        // this.projectionVertx.close();
     }
 
     private PgAsyncPool pgAsyncPool(Vertx vertx) {
@@ -129,6 +129,22 @@ public class Bank implements Closeable {
         pgPool = PgPool.pool(vertx, options, poolOptions);
 
         return PgAsyncPool.create(pgPool, jooqConfig);
+    }
+
+    private PgAsyncPool projectionPgAsyncPool(Vertx vertx) {
+        DefaultConfiguration jooqConfig = new DefaultConfiguration();
+        jooqConfig.setSQLDialect(SQLDialect.POSTGRES);
+
+        PgConnectOptions options = new PgConnectOptions()
+                .setHost(dotenv.get("PPG_HOST"))
+                .setPort(Integer.parseInt(dotenv.get("PPG_PORT")))
+                .setUser(dotenv.get("PPG_USER"))
+                .setPassword(dotenv.get("PPG_PWD"))
+                .setDatabase(dotenv.get("PPG_DB"));
+        PoolOptions poolOptions = new PoolOptions().setMaxSize(50);
+        projectionPgPool = PgPool.pool(vertx, options, poolOptions);
+
+        return PgAsyncPool.create(projectionPgPool, jooqConfig);
     }
 
     private KafkaSettings settings() {

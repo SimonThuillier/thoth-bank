@@ -2,11 +2,16 @@ package com.bts.thoth.bank.core;
 
 import java.math.BigDecimal;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import fr.maif.eventsourcing.Event;
 import fr.maif.eventsourcing.Type;
+import fr.maif.eventsourcing.format.JacksonEventFormat;
 import fr.maif.json.Json;
 import fr.maif.json.JsonFormat;
 import fr.maif.json.JsonRead;
+import fr.maif.json.JsonWrite;
+import io.vavr.API;
+import io.vavr.control.Either;
 
 import static fr.maif.json.Json.$$;
 import static fr.maif.json.JsonRead.__;
@@ -14,6 +19,7 @@ import static fr.maif.json.JsonRead._bigDecimal;
 import static fr.maif.json.JsonRead._string;
 import static fr.maif.json.JsonRead.caseOf;
 import static fr.maif.json.JsonWrite.$bigdecimal;
+import static io.vavr.API.*;
 
 public sealed interface BankEvent extends Event {
     Type<MoneyWithdrawn> MoneyWithdrawnV1 = Type.create(MoneyWithdrawn.class, 1L);
@@ -35,6 +41,44 @@ public sealed interface BankEvent extends Event {
                 case AccountClosed bankEvent -> AccountClosed.format.write(bankEvent);
             }
     );
+
+    public static class BankEventJsonParser {
+
+        public Either<String, BankEvent> read(JsonNode json) {
+            String eventType = json.has("eventType")? json.get("eventType").textValue(): "NA";
+
+            if(eventType.equals("NA")){
+                return Left("Not implemented: eventType not found");
+            }
+
+            return switch (eventType) {
+                case "AccountOpened" -> Right((BankEvent) Json.fromJson(json, AccountOpened.class).get());
+                case "MoneyDeposited" -> Right((BankEvent) Json.fromJson(json, MoneyDeposited.class).get());
+                case "MoneyWithdrawn" -> Right((BankEvent) Json.fromJson(json, MoneyWithdrawn.class).get());
+                case "AccountClosed" -> Right((BankEvent) Json.fromJson(json, AccountClosed.class).get());
+                default -> Left("Not implemented: eventType " + eventType + " unknown");
+            };
+        }
+    }
+
+    public static class BankEventJsonFormat implements JacksonEventFormat<String, BankEvent> {
+        @Override
+        public Either<String, BankEvent> read(String type, Long version, JsonNode json) {
+            return Match(API.Tuple(type, version))
+                    .option(
+                            Case(AccountOpenedV1.pattern2(), (t, v) -> (BankEvent)Json.fromJson(json, BankEvent.AccountOpened.class).get()),
+                            Case(MoneyWithdrawnV1.pattern2(), (t, v) -> (BankEvent)Json.fromJson(json, BankEvent.MoneyWithdrawn.class).get()),
+                            Case(MoneyDepositedV1.pattern2(), (t, v) -> (BankEvent)Json.fromJson(json, BankEvent.MoneyDeposited.class).get()),
+                            Case(AccountClosedV1.pattern2(), (t, v) -> (BankEvent)Json.fromJson(json, BankEvent.AccountClosed.class).get())
+                    )
+                    .toEither("Not implemented");
+        }
+
+        @Override
+        public JsonNode write(BankEvent json) {
+            return Json.toJson(json, JsonWrite.auto());
+        }
+    }
 
     record MoneyWithdrawn(String accountId, BigDecimal amount) implements BankEvent {
 
@@ -82,6 +126,13 @@ public sealed interface BankEvent extends Event {
                         $$("accountId", moneyWithdrawn.accountId)
                 )
         );
+
+        public static MoneyWithdrawn parse(JsonNode json){
+            return new MoneyWithdrawnBuilder()
+                    .accountId(json.get("event").get("accountId").textValue())
+                    .amount(BigDecimal.valueOf(json.get("event").get("amount").asDouble()))
+                    .build();
+        }
     }
 
     record AccountOpened(String accountId) implements BankEvent {

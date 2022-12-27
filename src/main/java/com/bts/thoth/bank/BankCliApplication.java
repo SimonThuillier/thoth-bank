@@ -1,7 +1,5 @@
 package com.bts.thoth.bank;
 
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -12,14 +10,12 @@ import java.util.regex.Matcher;
 import com.bts.thoth.bank.core.Account;
 import com.bts.thoth.bank.core.BankCommandHandler;
 import com.bts.thoth.bank.core.BankEventHandler;
-import io.vavr.Tuple;
-import io.vavr.Tuple0;
+
 import io.vavr.collection.List;
 import io.vavr.control.Either;
 import io.vavr.control.Option;
 
 import static io.vavr.API.*;
-import static io.vavr.Predicates.*;
 import static java.lang.Thread.sleep;
 
 import io.vertx.core.impl.logging.Logger;

@@ -2,6 +2,7 @@ package com.bts.thoth.bank.core;
 
 import com.bts.thoth.bank.core.BankEvent.*;
 import fr.maif.eventsourcing.Type;
+import fr.maif.eventsourcing.format.JacksonEventFormat;
 import fr.maif.json.EventEnvelopeJsonFormat;
 import fr.maif.json.JsonRead;
 import fr.maif.json.JsonWrite;
