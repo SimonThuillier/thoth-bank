@@ -35,12 +35,14 @@ public class Bank implements Closeable {
 
     private static final Dotenv dotenv = Dotenv.load();
     private static final TimeBasedGenerator UUIDgenerator = Generators.timeBasedGenerator();
-    private final String accountTable = """
+    private static final String accountTable = """
             CREATE TABLE IF NOT EXISTS ACCOUNTS (
                 id varchar(100) PRIMARY KEY,
                 balance money NOT NULL
             );""";
-    private final String bankJournalTable = """
+
+    private static final String dropAccountTable = "DROP TABLE IF EXISTS ACCOUNTS;";
+    private static final String bankJournalTable = """
 
             CREATE TABLE IF NOT EXISTS bank_journal (
               id UUID primary key,
@@ -60,9 +62,13 @@ public class Bank implements Closeable {
               published boolean default false,
               UNIQUE (entity_id, sequence_num)
             );""";
-    private final String SEQUENCE = """
+
+    private static final String dropBankJournalTable = "DROP TABLE IF EXISTS bank_journal;";
+    private static final String SEQUENCE = """
                     CREATE SEQUENCE if not exists bank_sequence_num;
             """;
+
+    private static final String dropSequence = "DROP SEQUENCE IF EXISTS bank_sequence_num;";
 
     private final PgAsyncPool projectionPgAsyncPool;
     private PgPool pgPool;
@@ -104,6 +110,13 @@ public class Bank implements Closeable {
                     e.printStackTrace();
                 })
                 .flatMap(__ -> withdrawByMonthProjection.init())
+                .thenReturn(Tuple.empty());
+    }
+
+    public static Mono<Tuple0> drop(PgAsyncPool pgAsyncPool) {
+        return Flux.fromIterable(List(dropAccountTable, dropBankJournalTable, dropSequence))
+                .concatMap(script -> pgAsyncPool.executeMono(d -> d.query(script)))
+                .collectList()
                 .thenReturn(Tuple.empty());
     }
 

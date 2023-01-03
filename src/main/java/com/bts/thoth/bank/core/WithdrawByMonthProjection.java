@@ -88,7 +88,9 @@ public class WithdrawByMonthProjection implements ReactorProjection<PgAsyncTrans
                     month text,
                     year smallint,
                     withdraw numeric,
-                    count integer
+                    count integer,
+                    created_at timestamp,
+                    updated_at timestamp
                  );"""
                         .replaceAll("<targetTable>", targetTable)))
                 .flatMap(__ ->
@@ -109,6 +111,64 @@ public class WithdrawByMonthProjection implements ReactorProjection<PgAsyncTrans
                         ADD CONSTRAINT <targetTable>_UNIQUE UNIQUE\s
                         USING INDEX <targetTable>_UNIQUE_IDX;"""
                                 .replaceAll("<targetTable>", targetTable)))
+                )
+                .flatMap(__ ->
+                        pgAsyncPool.executeMono(dsl -> dsl.query("""
+                        CREATE UNIQUE INDEX IF NOT EXISTS <targetTable>_UNIQUE_IDX ON\s
+                        <targetTable>(client_id, month, year);"""
+                                .replaceAll("<targetTable>", targetTable)))
+                )
+                .flatMap(__ ->
+                        pgAsyncPool.executeMono(dsl -> dsl.query("""
+                        CREATE OR REPLACE FUNCTION on_insert_f()
+                        RETURNS TRIGGER
+                        LANGUAGE PLPGSQL
+                        AS
+                        $$
+                        BEGIN
+                            NEW.created_at = now();
+                            NEW.updated_at = NEW.created_at;
+                            RETURN NEW;
+                        END;
+                        $$;"""))
+                )
+                .flatMap(__ ->
+                        pgAsyncPool.executeMono(dsl -> dsl.query("""
+                        CREATE OR REPLACE FUNCTION on_update_f()
+                        RETURNS TRIGGER
+                        LANGUAGE PLPGSQL
+                        AS
+                        $$
+                        BEGIN
+                            NEW.updated_at = now();
+                            RETURN NEW;
+                        END;
+                        $$;"""))
+                )
+                .flatMap(__ ->
+                        pgAsyncPool.executeMono(dsl -> dsl.query("""
+                        CREATE TRIGGER on_update BEFORE UPDATE
+                            ON <targetTable> FOR EACH ROW
+                        EXECUTE FUNCTION on_update_f();""".replaceAll("<targetTable>", targetTable)))
+                        )
+                .flatMap(__ ->
+                        pgAsyncPool.executeMono(dsl -> dsl.query("""
+                        CREATE TRIGGER on_insert BEFORE INSERT
+                        ON <targetTable> FOR EACH ROW
+                        EXECUTE FUNCTION on_insert_f();""".replaceAll("<targetTable>", targetTable)))
                 );
+    }
+
+    public Mono<Integer> drop(){
+        return this.pgAsyncPool.executeMono(dsl -> dsl.query("""
+                 DROP TABLE IF EXISTS <targetTable>;"""
+                .replaceAll("<targetTable>", targetTable)))
+                .flatMap(__ ->
+                        pgAsyncPool.executeMono(dsl -> dsl.query("""
+                        DROP FUNCTION IF EXISTS on_update_f;""")))
+                .flatMap(__ ->
+                        pgAsyncPool.executeMono(dsl -> dsl.query("""
+                        DROP FUNCTION IF EXISTS on_insert_f;"""))
+                        );
     }
 }

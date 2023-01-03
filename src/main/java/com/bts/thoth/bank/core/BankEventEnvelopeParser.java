@@ -27,7 +27,9 @@ public class BankEventEnvelopeParser {
             return Left("TODO : EventType to implement.");
         }
 
-        return Right((EventEnvelope<BankEvent, Tuple0, Tuple0>) EventEnvelope.builder()
+        EventEnvelope.Builder<BankEvent, Tuple0, Tuple0> builder = EventEnvelope.builder();
+
+        return Right(builder
                 .withEventType(MoneyWithdrawnV1.name())
                 .withEvent(event)
                 .withEmissionDate(LocalDateTime.parse(json.get("emissionDate").asText()))
