@@ -12,6 +12,7 @@ import com.bts.thoth.bank.core.BankCommandHandler;
 import com.bts.thoth.bank.core.BankEventHandler;
 
 import io.vavr.collection.List;
+import io.vavr.collection.Set;
 import io.vavr.control.Either;
 import io.vavr.control.Option;
 
@@ -55,7 +56,8 @@ public class BankCliApplication
             4 - get history
             5 - close account
             6 - exit account
-            7 - exit app""";
+            7 - exit app
+            8 - transfer""";
 
     private static Logger LOG = LoggerFactory
             .getLogger(BankCliApplication.class);
@@ -189,7 +191,7 @@ public class BankCliApplication
         System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
         Scanner sc= new Scanner(System.in);
         String input;
-        Pattern actionPattern = Pattern.compile("^([1-7])$");
+        Pattern actionPattern = Pattern.compile("^([1-8])$");
         Matcher actionMatcher;
 
         while (selectedAction != 6 && selectedAction != 7 && selectedAccountId.isDefined()){
@@ -242,6 +244,11 @@ public class BankCliApplication
                 case 6, 7:
                     selectedAccountId = Option.none();
                     // account menu loop will exit
+                    break;
+                case 8:
+                    this.transfer();
+                    selectedAction = 0;
+                    System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
                     break;
                 case -1:
                     break;
@@ -347,6 +354,59 @@ public class BankCliApplication
                                         account -> {
                                             System.out.println("successfully done !");
                                             System.out.println("New balance is: " + account.getBalance());
+                                            return Mono.from(Flux.range(0, 0));
+                                        }
+                                )
+                )
+                .doOnError(Throwable::printStackTrace)
+                .subscribe();
+
+        while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
+    }
+
+    private void transfer(){
+
+        System.out.print("Type amount to transfer (ex 10.5) or 'cancel' to abort, and enter to validate: ");
+        Option<BigDecimal> transfer = requestPositiveAmountOrCancel();
+        if(transfer.isEmpty()){return;} // action was cancelled
+
+        System.out.print("Type the target account Id where to transfer money or 'cancel' to abort, and enter to validate: ");
+        Option<String> targetAccountId = requestChoicesOrCancel(Option.none());
+        if(targetAccountId.isEmpty()){return;} // action was cancelled
+
+        BigDecimal finalTransfer = transfer.get();
+        String finalTargetAccountId = targetAccountId.get();
+        System.out.print("Transferring...");
+
+        Option<BigDecimal> originAccountNewBalance = Option.none();
+
+        Disposable task = Mono.
+                from(Flux.range(0, 1))
+                .flatMap(__ -> bank.withdraw(selectedAccountId.get(), finalTransfer))
+                .flatMap(errorOrState ->
+                        errorOrState
+                                .fold(
+                                        (e) -> {
+                                            println("ERROR : " + e);
+                                            return Mono.from(Flux.range(0, 0));
+                                        },
+                                        account -> {
+                                            originAccountNewBalance.transform(__ -> Option.some(account.getBalance()));
+                                            return Mono.from(Flux.range(0, 0));
+                                        }
+                                )
+                )
+                .flatMap(__ -> bank.deposit(finalTargetAccountId, finalTransfer))
+                .flatMap(errorOrState ->
+                        errorOrState
+                                .fold(
+                                        (e) -> {
+                                            println("ERROR : " + e);
+                                            return Mono.from(Flux.range(0, 0));
+                                        },
+                                        account -> {
+                                            System.out.println("successfully done !");
+                                            System.out.println("After transfer to account " + finalTargetAccountId + " my new balance is: " + originAccountNewBalance.get());
                                             return Mono.from(Flux.range(0, 0));
                                         }
                                 )
