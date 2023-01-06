@@ -39,4 +39,11 @@ public sealed interface BankCommand extends SimpleCommand {
             return Lazy.of(() -> id);
         }
     }
+
+    record Transfer(String originAccount, String targetAccount, BigDecimal amount) implements BankCommand {
+        @Override
+        public Lazy<String> entityId() {
+            return Lazy.of(() -> originAccount);
+        }
+    }
 }

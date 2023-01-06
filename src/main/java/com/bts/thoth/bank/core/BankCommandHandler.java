@@ -23,6 +23,7 @@ import com.bts.thoth.bank.core.BankCommand.CloseAccount;
 import com.bts.thoth.bank.core.BankCommand.Deposit;
 import com.bts.thoth.bank.core.BankCommand.OpenAccount;
 import com.bts.thoth.bank.core.BankCommand.Withdraw;
+import com.bts.thoth.bank.core.BankCommand.Transfer;
 
 public class BankCommandHandler implements ReactorCommandHandler<String, Account, BankCommand, BankEvent, Tuple0, PgAsyncTransaction> {
     @Override
@@ -35,6 +36,7 @@ public class BankCommandHandler implements ReactorCommandHandler<String, Account
             case Deposit deposit -> this.handleDeposit(previousState, deposit);
             case OpenAccount openAccount -> this.handleOpening(openAccount);
             case CloseAccount close -> this.handleClosing(previousState, close);
+            case Transfer transfer -> this.handleTransfer(previousState, transfer);
         });
     }
 
@@ -81,6 +83,22 @@ public class BankCommandHandler implements ReactorCommandHandler<String, Account
                         return Left("Insufficient balance");
                     }
                     return Right(Events.events(new BankEvent.MoneyWithdrawn(withdraw.account(), withdraw.amount())));
+                });
+    }
+
+    private Either<String, Events<BankEvent, Tuple0>> handleTransfer(
+            Option<Account> previousState,
+            Transfer transfer) {
+        return previousState.toEither("Account does not exist")
+                .flatMap(previous -> {
+                    BigDecimal newBalance = previous.balance.subtract(transfer.amount());
+                    if(newBalance.compareTo(BigDecimal.ZERO) < 0) {
+                        return Left("Insufficient balance");
+                    }
+                    return Right(Events.events(
+                            new BankEvent.MoneyWithdrawn(transfer.originAccount(), transfer.amount()),
+                            new BankEvent.MoneyDeposited(transfer.targetAccount(), transfer.amount())
+                    ));
                 });
     }
 }
