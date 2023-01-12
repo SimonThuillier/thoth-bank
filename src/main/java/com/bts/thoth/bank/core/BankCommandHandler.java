@@ -6,9 +6,6 @@ import static io.vavr.API.Left;
 import static io.vavr.API.List;
 import static io.vavr.API.Right;
 
-import com.bts.thoth.bank.core.Account;
-import com.bts.thoth.bank.core.BankCommand;
-import com.bts.thoth.bank.core.BankEvent;
 import io.vavr.Tuple0;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
@@ -23,7 +20,6 @@ import com.bts.thoth.bank.core.BankCommand.CloseAccount;
 import com.bts.thoth.bank.core.BankCommand.Deposit;
 import com.bts.thoth.bank.core.BankCommand.OpenAccount;
 import com.bts.thoth.bank.core.BankCommand.Withdraw;
-import com.bts.thoth.bank.core.BankCommand.Transfer;
 
 public class BankCommandHandler implements ReactorCommandHandler<String, Account, BankCommand, BankEvent, Tuple0, PgAsyncTransaction> {
     @Override
@@ -36,7 +32,6 @@ public class BankCommandHandler implements ReactorCommandHandler<String, Account
             case Deposit deposit -> this.handleDeposit(previousState, deposit);
             case OpenAccount openAccount -> this.handleOpening(openAccount);
             case CloseAccount close -> this.handleClosing(previousState, close);
-            case Transfer transfer -> this.handleTransfer(previousState, transfer);
         });
     }
 
@@ -59,9 +54,18 @@ public class BankCommandHandler implements ReactorCommandHandler<String, Account
     private Either<String, Events<BankEvent, Tuple0>> handleClosing(
             Option<Account> previousState,
             CloseAccount close) {
+
+        if(previousState.isEmpty()) {
+            return Left("This account doesn't exist.");
+        }
+
         AppLogger.getLogger().info("Handling account " + close.id() + " closing.");
-        return previousState.toEither("No account opened for this id : " + close.id())
-                .map(state ->  Events.events(new BankEvent.AccountClosed(close.id())));
+        List<BankEvent> events = List(new BankEvent.AccountClosed(close.id()));
+        if(previousState.get().getBalance().compareTo(BigDecimal.ZERO) > 0) {
+            events = events.prepend(new BankEvent.MoneyWithdrawn(close.id(), previousState.get().getBalance()));
+        }
+
+        return Right(Events.events(events));
     }
 
     private Either<String, Events<BankEvent, Tuple0>> handleDeposit(
@@ -83,22 +87,6 @@ public class BankCommandHandler implements ReactorCommandHandler<String, Account
                         return Left("Insufficient balance");
                     }
                     return Right(Events.events(new BankEvent.MoneyWithdrawn(withdraw.account(), withdraw.amount())));
-                });
-    }
-
-    private Either<String, Events<BankEvent, Tuple0>> handleTransfer(
-            Option<Account> previousState,
-            Transfer transfer) {
-        return previousState.toEither("Account does not exist")
-                .flatMap(previous -> {
-                    BigDecimal newBalance = previous.balance.subtract(transfer.amount());
-                    if(newBalance.compareTo(BigDecimal.ZERO) < 0) {
-                        return Left("Insufficient balance");
-                    }
-                    return Right(Events.events(
-                            new BankEvent.MoneyWithdrawn(transfer.originAccount(), transfer.amount()),
-                            new BankEvent.MoneyDeposited(transfer.targetAccount(), transfer.amount())
-                    ));
                 });
     }
 }

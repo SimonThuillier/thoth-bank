@@ -1,16 +1,14 @@
 package com.bts.thoth.bank.core;
 
+import java.util.UUID;
+import java.time.LocalDateTime;
+
 import com.fasterxml.jackson.databind.JsonNode;
-import fr.maif.eventsourcing.EventEnvelope;
-import fr.maif.json.Json;
 import io.vavr.Tuple0;
 import io.vavr.control.Either;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-import static com.bts.thoth.bank.core.BankEvent.MoneyWithdrawnV1;
 import static io.vavr.API.*;
+
+import fr.maif.eventsourcing.EventEnvelope;
 
 public class BankEventEnvelopeParser {
 
@@ -21,23 +19,19 @@ public class BankEventEnvelopeParser {
         if(eventOrElse.isLeft()){
             return Left(eventOrElse.getLeft());
         }
-        BankEvent event = (BankEvent)eventOrElse.get();
-
-        if(!event.type().name().equals(MoneyWithdrawnV1.name())){
-            return Left("TODO : EventType to implement.");
-        }
+        BankEvent event = eventOrElse.get();
 
         EventEnvelope.Builder<BankEvent, Tuple0, Tuple0> builder = EventEnvelope.builder();
-
-        return Right(builder
-                .withEventType(MoneyWithdrawnV1.name())
+        builder
                 .withEvent(event)
                 .withEmissionDate(LocalDateTime.parse(json.get("emissionDate").asText()))
                 .withId(UUID.fromString(json.get("id").asText()))
                 .withEntityId(json.get("entityId").asText())
                 .withSequenceNum(json.get("sequenceNum").asLong())
                 .withTransactionId(json.get("transactionId").asText())
-                .build());
+                .withEventType(event.type().name());
+
+        return Right(builder.build());
     }
 
     private static Either<String, BankEvent> getEventFromJson(JsonNode json){
@@ -49,14 +43,11 @@ public class BankEventEnvelopeParser {
         }
 
         return switch (eventType) {
-            case "AccountOpened" -> Right((BankEvent) Json.fromJson(json, BankEvent.AccountOpened.class).get());
-            case "MoneyDeposited" -> Right((BankEvent) Json.fromJson(json, BankEvent.MoneyDeposited.class).get());
+            case "AccountOpened" -> Right(BankEvent.AccountOpened.parse(json));
+            case "MoneyDeposited" -> Right(BankEvent.MoneyDeposited.parse(json));
             case "MoneyWithdrawn" -> Right(BankEvent.MoneyWithdrawn.parse(json));
-            case "AccountClosed" -> Right((BankEvent) Json.fromJson(json, BankEvent.AccountClosed.class).get());
+            case "AccountClosed" -> Right(BankEvent.AccountClosed.parse(json));
             default -> Left("Not implemented: eventType " + eventType + " unknown");
         };
     }
-
-
-
 }
