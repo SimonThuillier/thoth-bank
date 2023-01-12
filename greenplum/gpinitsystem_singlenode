@@ -1,6 +1,6 @@
 # A configuration file is needed by the gpinitsystem utility.
 # This sample file initializes a Greenplum Database Single Node
-# Edition (SNE) system with one master and  two segment instances
+# Edition (SNE) system with one master and two segment instances
 # on the local host. This file is referenced when you run gpinitsystem.
 
 ################################################
