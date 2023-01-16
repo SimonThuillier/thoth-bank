@@ -1,12 +1,11 @@
 package com.bts.thoth.bank;
 
-import com.bts.thoth.bank.core.Account;
-import com.bts.thoth.bank.core.BankCommandHandler;
-import com.bts.thoth.bank.core.BankEventHandler;
+import com.bts.thoth.bank.account.Account;
 import io.vavr.control.Either;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-import com.bts.logging.AppLogger;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
@@ -19,11 +18,10 @@ public class DemoApplication {
 
 	public static void main(String[] args) {
 
-		AppLogger.getLogger().info("Starting app...");
+		ApplicationContext context = new AnnotationConfigApplicationContext(
+				"com.bts.thoth.bank", "com.bts.thoth.bank.config");
 
-		BankCommandHandler commandHandler = new BankCommandHandler();
-		BankEventHandler eventHandler = new BankEventHandler();
-		Bank bank = new Bank(commandHandler, eventHandler);
+		Bank bank = context.getBean(Bank.class);
 
 		bank.init()
 				.flatMap(__ -> bank.createAccount(BigDecimal.valueOf(100)))
@@ -32,9 +30,7 @@ public class DemoApplication {
 								.fold(
 										error -> Mono.just(Either.<String, Account>left(error)),
 										currentState -> {
-											//String id = currentState.id;
-											String id = "lolilol";
-
+											String id = currentState.id;
 											println("account created with id "+id);
 											return bank.withdraw(id, BigDecimal.valueOf(500))
 													.map(withDrawProcessingResult -> withDrawProcessingResult.map(Account::getBalance))

@@ -1,5 +1,10 @@
-package com.bts.thoth.bank.core;
+package com.bts.thoth.bank.account;
 
+import com.bts.thoth.bank.config.EventStoreDataSourceConfig;
+import com.bts.thoth.bank.config.KafkaConfig;
+import com.bts.thoth.bank.config.ProjectionDataSourceConfig;
+import com.bts.thoth.bank.projections.AsyncWithdrawByMonthProjection;
+import com.bts.thoth.bank.projections.WithdrawByMonthProjection;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.uuid.Generators;
@@ -7,7 +12,6 @@ import com.fasterxml.uuid.impl.TimeBasedGenerator;
 import fr.maif.eventsourcing.EventEnvelope;
 import fr.maif.jooq.reactor.PgAsyncPool;
 import fr.maif.kafka.reactor.consumer.ResilientKafkaConsumer;
-import io.github.cdimascio.dotenv.Dotenv;
 import io.vavr.Tuple0;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
@@ -17,10 +21,10 @@ import io.vertx.pgclient.PgPool;
 import io.vertx.sqlclient.PoolOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DefaultConfiguration;
+import org.springframework.context.ApplicationContext;
+import org.springframework.stereotype.Component;
 import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -31,9 +35,9 @@ import reactor.kafka.receiver.ReceiverRecord;
 import java.util.HashMap;
 import java.util.Map;
 
+@Component
 public class BankAsynchronousProjector {
 
-    private static final Dotenv dotenv = Dotenv.load();
     private static final TimeBasedGenerator UUIDgenerator = Generators.timeBasedGenerator();
     private static PgPool pgPool;
     private static final Vertx vertx = Vertx.vertx();
@@ -42,19 +46,22 @@ public class BankAsynchronousProjector {
 
     private static ReceiverOptions<String, String> receiverOptions;
 
-    public BankAsynchronousProjector(){
+    private KafkaConfig kafkaConfig;
 
-        Logger.getRootLogger().setLevel(Level.INFO);
+    public BankAsynchronousProjector(ApplicationContext applicationContext){
+
+        kafkaConfig = applicationContext.getBean(KafkaConfig.class);
+        ProjectionDataSourceConfig projectionDataSourceConfig = applicationContext.getBean(ProjectionDataSourceConfig.class);
 
         DefaultConfiguration jooqConfig = new DefaultConfiguration();
         jooqConfig.setSQLDialect(SQLDialect.POSTGRES);
 
         PgConnectOptions options = new PgConnectOptions()
-                .setHost(dotenv.get("PPG_HOST"))
-                .setPort(Integer.parseInt(dotenv.get("PPG_PORT")))
-                .setUser(dotenv.get("PPG_USER"))
-                .setPassword(dotenv.get("PPG_PWD"))
-                .setDatabase(dotenv.get("PPG_DB"));
+                .setHost(projectionDataSourceConfig.getHost())
+                .setPort(projectionDataSourceConfig.getPort())
+                .setUser(projectionDataSourceConfig.getUser())
+                .setPassword(projectionDataSourceConfig.getPassword())
+                .setDatabase(projectionDataSourceConfig.getDatabase());
         PoolOptions poolOptions = new PoolOptions().setMaxSize(50);
         pgPool = PgPool.pool(vertx, options, poolOptions);
         pgProjectionPool = PgAsyncPool.create(pgPool, jooqConfig);
@@ -63,7 +70,7 @@ public class BankAsynchronousProjector {
         withdrawByMonthProjection.init().subscribe();
 
         Map<String, Object> props = new HashMap<>();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, dotenv.get("KAFKA_HOST"));
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaConfig.getHost());
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -75,7 +82,7 @@ public class BankAsynchronousProjector {
         ResilientKafkaConsumer<String, String> resilientKafkaConsumer = ResilientKafkaConsumer.createFromFlow(
                 "ThothBankConsumer-" + UUIDgenerator.generate(),
                 ResilientKafkaConsumer.Config.create(
-                        java.util.List.of(dotenv.get("KAFKA_TOPIC")),
+                        java.util.List.of(kafkaConfig.getTopic()),
                         "ThothBankConsumer-lol10",
                         receiverOptions
                 ),
@@ -103,7 +110,7 @@ public class BankAsynchronousProjector {
                             })
                             .log()
                             .map(json -> {
-                                Either<String, EventEnvelope<BankEvent, Tuple0, Tuple0>> parsedEvent = BankEventEnvelopeParser.parseEnvelope(json);
+                                Either<String, EventEnvelope<AccountEvent, Tuple0, Tuple0>> parsedEvent = AccountEventEnvelopeParser.parseEnvelope(json);
                                 return parsedEvent;
                             })
                             .log()

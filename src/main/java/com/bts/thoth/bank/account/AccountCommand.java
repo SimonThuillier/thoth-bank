@@ -1,13 +1,13 @@
-package com.bts.thoth.bank.core;
+package com.bts.thoth.bank.account;
 
 import fr.maif.eventsourcing.SimpleCommand;
 import io.vavr.Lazy;
 
 import java.math.BigDecimal;
 
-public sealed interface BankCommand extends SimpleCommand {
+public sealed interface AccountCommand extends SimpleCommand {
 
-    record OpenAccount(Lazy<String> id, BigDecimal initialBalance) implements BankCommand {
+    record OpenAccount(Lazy<String> id, BigDecimal initialBalance) implements AccountCommand {
         @Override
         public Lazy<String> entityId() {
             return id;
@@ -19,21 +19,21 @@ public sealed interface BankCommand extends SimpleCommand {
         }
     }
 
-    record Deposit(String account, BigDecimal amount) implements BankCommand {
+    record Deposit(String account, BigDecimal amount) implements AccountCommand {
         @Override
         public Lazy<String> entityId() {
             return Lazy.of(() -> account);
         }
     }
 
-    record Withdraw(String account, BigDecimal amount) implements BankCommand {
+    record Withdraw(String account, BigDecimal amount) implements AccountCommand {
         @Override
         public Lazy<String> entityId() {
             return Lazy.of(() -> account);
         }
     }
 
-    record CloseAccount(String id) implements BankCommand {
+    record CloseAccount(String id) implements AccountCommand {
         @Override
         public Lazy<String> entityId() {
             return Lazy.of(() -> id);

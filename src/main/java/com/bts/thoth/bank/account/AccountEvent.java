@@ -1,4 +1,4 @@
-package com.bts.thoth.bank.core;
+package com.bts.thoth.bank.account;
 
 import java.math.BigDecimal;
 
@@ -17,22 +17,20 @@ import static fr.maif.json.JsonRead._string;
 import static fr.maif.json.JsonRead.caseOf;
 import static fr.maif.json.JsonWrite.$bigdecimal;
 
-import com.bts.thoth.bank.core.TransferMode;
-
-public sealed interface BankEvent extends Event {
+public sealed interface AccountEvent extends Event {
     Type<AccountOpened> AccountOpenedV1 = Type.create(AccountOpened.class, 1L);
     Type<MoneyDeposited> MoneyDepositedV1 = Type.create(MoneyDeposited.class, 1L);
     Type<MoneyWithdrawn> MoneyWithdrawnV1 = Type.create(MoneyWithdrawn.class, 1L);
     Type<AccountClosed> AccountClosedV1 = Type.create(AccountClosed.class, 1L);
 
-    JsonFormat<BankEvent> format = JsonFormat.of(
+    JsonFormat<AccountEvent> format = JsonFormat.of(
             JsonRead.oneOf(_string("type"),
                     caseOf("AccountOpened"::equals, AccountOpened.format),
                     caseOf("MoneyDeposited"::equals, MoneyDeposited.format),
                     caseOf("MoneyWithdrawn"::equals, MoneyWithdrawn.format),
                     caseOf("AccountClosed"::equals, AccountClosed.format)
             ),
-            (BankEvent event) -> switch (event) {
+            (AccountEvent event) -> switch (event) {
                 case AccountOpened bankEvent -> AccountOpened.format.write(bankEvent);
                 case MoneyDeposited bankEvent -> MoneyDeposited.format.write(bankEvent);
                 case MoneyWithdrawn bankEvent -> MoneyWithdrawn.format.write(bankEvent);
@@ -40,7 +38,7 @@ public sealed interface BankEvent extends Event {
             }
     );
 
-    record AccountOpened(String accountId) implements BankEvent {
+    record AccountOpened(String accountId) implements AccountEvent {
         static class AccountOpenedBuilder {
             String accountId;
 
@@ -83,7 +81,7 @@ public sealed interface BankEvent extends Event {
                     .build();
         }
     }
-    record MoneyDeposited(String accountId, BigDecimal amount) implements BankEvent {
+    record MoneyDeposited(String accountId, BigDecimal amount) implements AccountEvent {
 
         static class MoneyDepositedBuilder {
             String accountId;
@@ -137,7 +135,7 @@ public sealed interface BankEvent extends Event {
                     .build();
         }
     }
-    record MoneyWithdrawn(String accountId, BigDecimal amount) implements BankEvent {
+    record MoneyWithdrawn(String accountId, BigDecimal amount) implements AccountEvent {
 
         static class MoneyWithdrawnBuilder{
             String accountId;
@@ -191,7 +189,7 @@ public sealed interface BankEvent extends Event {
                     .build();
         }
     }
-    record AccountClosed(String accountId) implements BankEvent {
+    record AccountClosed(String accountId) implements AccountEvent {
         static class AccountClosedBuilder{
             String accountId;
 

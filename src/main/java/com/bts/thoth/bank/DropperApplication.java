@@ -1,11 +1,13 @@
 package com.bts.thoth.bank;
 
+import com.bts.thoth.bank.config.EventStoreDataSourceConfig;
+import com.bts.thoth.bank.config.KafkaConfig;
+import com.bts.thoth.bank.config.ProjectionDataSourceConfig;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.CommonClientConfigs;
-import com.bts.thoth.bank.core.AsyncWithdrawByMonthProjection;
-import com.bts.thoth.bank.core.WithdrawByMonthProjection;
+import com.bts.thoth.bank.projections.AsyncWithdrawByMonthProjection;
+import com.bts.thoth.bank.projections.WithdrawByMonthProjection;
 import fr.maif.jooq.reactor.PgAsyncPool;
-import io.github.cdimascio.dotenv.Dotenv;
 import io.vertx.core.Vertx;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.PgPool;
@@ -14,6 +16,8 @@ import io.vertx.sqlclient.PoolOptions;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DefaultConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -21,10 +25,9 @@ import java.util.Map;
 
 @SpringBootApplication
 public class DropperApplication {
-
-    private static final Dotenv dotenv = Dotenv.load();
-
     private static final Vertx vertx = Vertx.vertx();
+
+    private static ApplicationContext context;
 
     /**
      * application to drop projection, event state tables, and kafka topics
@@ -32,6 +35,10 @@ public class DropperApplication {
      * @param args
      */
     public static void main(String[] args){
+
+        context = new AnnotationConfigApplicationContext(
+                "com.bts.thoth.bank", "com.bts.thoth.bank.config");
+
         dropProjections();
         dropKafkaEvents();
         dropEventSources();
@@ -45,12 +52,15 @@ public class DropperApplication {
         DefaultConfiguration jooqConfig = new DefaultConfiguration();
         jooqConfig.setSQLDialect(SQLDialect.POSTGRES);
 
+
+        ProjectionDataSourceConfig projectionDataSourceConfig = context.getBean(ProjectionDataSourceConfig.class);
+
         PgConnectOptions options = new PgConnectOptions()
-                .setHost(dotenv.get("PPG_HOST"))
-                .setPort(Integer.parseInt(dotenv.get("PPG_PORT")))
-                .setUser(dotenv.get("PPG_USER"))
-                .setPassword(dotenv.get("PPG_PWD"))
-                .setDatabase(dotenv.get("PPG_DB"));
+                .setHost(projectionDataSourceConfig.getHost())
+                .setPort(projectionDataSourceConfig.getPort())
+                .setUser(projectionDataSourceConfig.getUser())
+                .setPassword(projectionDataSourceConfig.getPassword())
+                .setDatabase(projectionDataSourceConfig.getDatabase());
         PoolOptions poolOptions = new PoolOptions().setMaxSize(50);
         PgPool pgProjectionBasePool = PgPool.pool(vertx, options, poolOptions);
         PgAsyncPool pgAsyncProjectionBasePool = PgAsyncPool.create(pgProjectionBasePool, jooqConfig);
@@ -64,12 +74,14 @@ public class DropperApplication {
      */
     private static void dropKafkaEvents(){
 
+        KafkaConfig kafkaConfig = context.getBean(KafkaConfig.class);
+
         Map<String, Object> props = new HashMap<>();
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, dotenv.get("KAFKA_HOST"));
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, kafkaConfig.getHost());
 
         AdminClient kafkaAdminClient = AdminClient.create(props);
 
-        kafkaAdminClient.deleteTopics(Arrays.asList(dotenv.get("KAFKA_TOPIC")));
+        kafkaAdminClient.deleteTopics(Arrays.asList(kafkaConfig.getTopic()));
         kafkaAdminClient.close();
 
     }
@@ -80,15 +92,17 @@ public class DropperApplication {
      */
     private static void dropEventSources(){
 
+        EventStoreDataSourceConfig eventStoreDataSourceConfig = context.getBean(EventStoreDataSourceConfig.class);
+
         DefaultConfiguration jooqConfig = new DefaultConfiguration();
         jooqConfig.setSQLDialect(SQLDialect.POSTGRES);
 
         PgConnectOptions options = new PgConnectOptions()
-                .setHost(dotenv.get("EPG_HOST"))
-                .setPort(Integer.parseInt(dotenv.get("EPG_PORT")))
-                .setUser(dotenv.get("EPG_USER"))
-                .setPassword(dotenv.get("EPG_PWD"))
-                .setDatabase(dotenv.get("EPG_DB"));
+                .setHost(eventStoreDataSourceConfig.getHost())
+                .setPort(eventStoreDataSourceConfig.getPort())
+                .setUser(eventStoreDataSourceConfig.getUser())
+                .setPassword(eventStoreDataSourceConfig.getPassword())
+                .setDatabase(eventStoreDataSourceConfig.getDatabase());
         PoolOptions poolOptions = new PoolOptions().setMaxSize(50);
         PgPool pgEventBasePool = PgPool.pool(vertx, options, poolOptions);
         PgAsyncPool pgAsyncEventBasePool = PgAsyncPool.create(pgEventBasePool, jooqConfig);

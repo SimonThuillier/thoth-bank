@@ -1,4 +1,4 @@
-package com.bts.thoth.bank.core;
+package com.bts.thoth.bank.projections;
 
 import fr.maif.jooq.reactor.PgAsyncPool;
 

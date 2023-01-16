@@ -1,25 +1,27 @@
-package com.bts.thoth.bank.core;
+package com.bts.thoth.bank.account;
 
 import java.math.BigDecimal;
 
 import io.vavr.control.Option;
 import fr.maif.eventsourcing.EventHandler;
 
-import com.bts.thoth.bank.core.BankEvent.AccountClosed;
-import com.bts.thoth.bank.core.BankEvent.AccountOpened;
-import com.bts.thoth.bank.core.BankEvent.MoneyDeposited;
-import com.bts.thoth.bank.core.BankEvent.MoneyWithdrawn;
+import com.bts.thoth.bank.account.AccountEvent.AccountClosed;
+import com.bts.thoth.bank.account.AccountEvent.AccountOpened;
+import com.bts.thoth.bank.account.AccountEvent.MoneyDeposited;
+import com.bts.thoth.bank.account.AccountEvent.MoneyWithdrawn;
+import org.springframework.stereotype.Component;
 
-public class BankEventHandler implements EventHandler<Account, BankEvent> {
+@Component
+public class AccountEventHandler implements EventHandler<Account, AccountEvent> {
     @Override
     public Option<Account> applyEvent(
             Option<Account> previousState,
-            BankEvent event) {
+            AccountEvent event) {
         return switch (event) {
-            case AccountOpened accountOpened -> BankEventHandler.handleAccountOpened(accountOpened);
-            case MoneyDeposited deposit -> BankEventHandler.handleMoneyDeposited(previousState, deposit);
-            case MoneyWithdrawn deposit -> BankEventHandler.handleMoneyWithdrawn(previousState, deposit);
-            case AccountClosed accountClosed -> BankEventHandler.handleAccountClosed(accountClosed);
+            case AccountOpened accountOpened -> AccountEventHandler.handleAccountOpened(accountOpened);
+            case MoneyDeposited deposit -> AccountEventHandler.handleMoneyDeposited(previousState, deposit);
+            case MoneyWithdrawn deposit -> AccountEventHandler.handleMoneyWithdrawn(previousState, deposit);
+            case AccountClosed accountClosed -> AccountEventHandler.handleAccountClosed(accountClosed);
         };
     }
 

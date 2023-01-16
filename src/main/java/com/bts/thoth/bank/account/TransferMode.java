@@ -1,4 +1,4 @@
-package com.bts.thoth.bank.core;
+package com.bts.thoth.bank.account;
 
 public enum TransferMode {
 

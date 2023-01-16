@@ -1,0 +1,17 @@
+# app-config.properties template to copy and edit according to your environment
+#
+eventStoreDataSource.host=localhost
+eventStoreDataSource.port=5557
+eventStoreDataSource.user=thoth_bank
+eventStoreDataSource.password=thoth_bank
+eventStoreDataSource.database=thoth_bank_event_store
+#
+projectionDataSource.host=localhost
+projectionDataSource.port=5557
+projectionDataSource.user=thoth_bank
+projectionDataSource.password=thoth_bank
+projectionDataSource.database=thoth_bank_projection
+#
+kafka.host=localhost:29092
+kafka.topic=bank
+kafka.callback_topic=bank_callback

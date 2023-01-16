@@ -4,13 +4,15 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.math.BigDecimal;
 
-import com.bts.thoth.bank.core.*;
+import com.bts.thoth.bank.account.*;
+import com.bts.thoth.bank.config.EventStoreDataSourceConfig;
+import com.bts.thoth.bank.config.KafkaConfig;
+import com.bts.thoth.bank.config.ProjectionDataSourceConfig;
+import com.bts.thoth.bank.projections.WithdrawByMonthProjection;
 import fr.maif.eventsourcing.*;
-import io.github.cdimascio.dotenv.Dotenv;
 import com.fasterxml.uuid.Generators;
 import com.fasterxml.uuid.impl.TimeBasedGenerator;
 import static io.vavr.API.List;
-import static io.vavr.API.println;
 import io.vavr.Lazy;
 import io.vavr.Tuple;
 import io.vavr.Tuple0;
@@ -22,6 +24,10 @@ import io.vertx.pgclient.PgPool;
 import io.vertx.sqlclient.PoolOptions;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DefaultConfiguration;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.kafka.sender.SenderOptions;
@@ -31,9 +37,9 @@ import fr.maif.jooq.reactor.PgAsyncTransaction;
 import fr.maif.kafka.JsonFormatSerDer;
 import fr.maif.reactor.kafka.KafkaSettings;
 
+@Component
 public class Bank implements Closeable {
 
-    private static final Dotenv dotenv = Dotenv.load();
     private static final TimeBasedGenerator UUIDgenerator = Generators.timeBasedGenerator();
     private static final String accountTable = """
             CREATE TABLE IF NOT EXISTS ACCOUNTS (
@@ -70,15 +76,27 @@ public class Bank implements Closeable {
 
     private static final String dropSequence = "DROP SEQUENCE IF EXISTS bank_sequence_num;";
 
+    KafkaConfig kafkaConfig;
+    EventStoreDataSourceConfig eventStoreDataSourceConfig;
+    ProjectionDataSourceConfig projectionDataSourceConfig;
+
     private final PgAsyncPool projectionPgAsyncPool;
     private PgPool pgPool;
     private final Vertx vertx;
     private final PgAsyncPool pgAsyncPool; // event store projection
     private PgPool projectionPgPool;
-    private final ReactorEventProcessor<String, Account, BankCommand, BankEvent, PgAsyncTransaction, Tuple0, Tuple0, Tuple0> eventProcessor;
+    private final ReactorEventProcessor<String, Account, AccountCommand, AccountEvent, PgAsyncTransaction, Tuple0, Tuple0, Tuple0> eventProcessor;
     private final WithdrawByMonthProjection withdrawByMonthProjection;
 
-    public Bank(BankCommandHandler commandHandler, BankEventHandler eventHandler) {
+    public Bank(
+            ApplicationContext applicationContext,
+            AccountCommandHandler commandHandler,
+            AccountEventHandler eventHandler
+    ) {
+        kafkaConfig = applicationContext.getBean(KafkaConfig.class);
+        eventStoreDataSourceConfig = applicationContext.getBean(EventStoreDataSourceConfig.class);
+        projectionDataSourceConfig = applicationContext.getBean(ProjectionDataSourceConfig.class);
+
         this.vertx = Vertx.vertx();
         this.pgAsyncPool = pgAsyncPool(vertx);
         this.projectionPgAsyncPool = projectionPgAsyncPool(vertx);
@@ -88,10 +106,12 @@ public class Bank implements Closeable {
                 .withPgAsyncPool(pgAsyncPool)
                 .withTables(tableNames())
                 .withTransactionManager()
-                .withEventFormater(BankEventFormat.bankEventFormat.jacksonEventFormat())
+                .withEventFormater(AccountEventFormat.accountEventFormat.jacksonEventFormat())
                 .withNoMetaFormater()
                 .withNoContextFormater()
-                .withKafkaSettings(dotenv.get("KAFKA_TOPIC"), senderOptions(settings()))
+                .withKafkaSettings(
+                        kafkaConfig.getTopic(),
+                        senderOptions(settings()))
                 .withEventHandler(eventHandler)
                 .withDefaultAggregateStore()
                 .withCommandHandler(commandHandler)
@@ -100,13 +120,13 @@ public class Bank implements Closeable {
     }
 
     public Mono<Tuple0> init() {
-        println("Initializing database");
+        LoggerFactory.getLogger("Bank").info("Initializing database");
         return Flux.fromIterable(List(accountTable, bankJournalTable, SEQUENCE))
                 .concatMap(script -> pgAsyncPool.executeMono(d -> d.query(script)))
                 .collectList()
-                .doOnSuccess(__ -> println("Database initialized"))
+                .doOnSuccess(__ -> LoggerFactory.getLogger("Bank").info("Database initialized"))
                 .doOnError(e -> {
-                    println("Database initialization failed");
+                    LoggerFactory.getLogger("Bank").error("Database initialization failed");
                     e.printStackTrace();
                 })
                 .flatMap(__ -> withdrawByMonthProjection.init())
@@ -133,11 +153,11 @@ public class Bank implements Closeable {
         jooqConfig.setSQLDialect(SQLDialect.POSTGRES);
 
         PgConnectOptions options = new PgConnectOptions()
-                .setHost(dotenv.get("EPG_HOST"))
-                .setPort(Integer.parseInt(dotenv.get("EPG_PORT")))
-                .setUser(dotenv.get("EPG_USER"))
-                .setPassword(dotenv.get("EPG_PWD"))
-                .setDatabase(dotenv.get("EPG_DB"));
+                .setHost(eventStoreDataSourceConfig.getHost())
+                .setPort(eventStoreDataSourceConfig.getPort())
+                .setUser(eventStoreDataSourceConfig.getUser())
+                .setPassword(eventStoreDataSourceConfig.getPassword())
+                .setDatabase(eventStoreDataSourceConfig.getDatabase());
         PoolOptions poolOptions = new PoolOptions().setMaxSize(50);
         pgPool = PgPool.pool(vertx, options, poolOptions);
 
@@ -149,11 +169,11 @@ public class Bank implements Closeable {
         jooqConfig.setSQLDialect(SQLDialect.POSTGRES);
 
         PgConnectOptions options = new PgConnectOptions()
-                .setHost(dotenv.get("PPG_HOST"))
-                .setPort(Integer.parseInt(dotenv.get("PPG_PORT")))
-                .setUser(dotenv.get("PPG_USER"))
-                .setPassword(dotenv.get("PPG_PWD"))
-                .setDatabase(dotenv.get("PPG_DB"));
+                .setHost(projectionDataSourceConfig.getHost())
+                .setPort(projectionDataSourceConfig.getPort())
+                .setUser(projectionDataSourceConfig.getUser())
+                .setPassword(projectionDataSourceConfig.getPassword())
+                .setDatabase(projectionDataSourceConfig.getDatabase());
         PoolOptions poolOptions = new PoolOptions().setMaxSize(50);
         projectionPgPool = PgPool.pool(vertx, options, poolOptions);
 
@@ -161,11 +181,11 @@ public class Bank implements Closeable {
     }
 
     private KafkaSettings settings() {
-        return KafkaSettings.newBuilder(dotenv.get("KAFKA_HOST")).build();
+        return KafkaSettings.newBuilder(kafkaConfig.getHost()).build();
     }
 
-    private SenderOptions<String, EventEnvelope<BankEvent, Tuple0, Tuple0>> senderOptions(KafkaSettings kafkaSettings) {
-        return kafkaSettings.producerSettings(JsonFormatSerDer.of(BankEventFormat.bankEventFormat));
+    private SenderOptions<String, EventEnvelope<AccountEvent, Tuple0, Tuple0>> senderOptions(KafkaSettings kafkaSettings) {
+        return kafkaSettings.producerSettings(JsonFormatSerDer.of(AccountEventFormat.accountEventFormat));
     }
 
     private TableNames tableNames() {
@@ -176,25 +196,25 @@ public class Bank implements Closeable {
     public Mono<Either<String, Account>> createAccount(
             BigDecimal amount) {
         Lazy<String> lazyId = Lazy.of(() -> UUIDgenerator.generate().toString());
-        return eventProcessor.processCommand(new BankCommand.OpenAccount(lazyId, amount))
+        return eventProcessor.processCommand(new AccountCommand.OpenAccount(lazyId, amount))
                 .map(res -> res.flatMap(processingResult -> processingResult.currentState.toEither("Current state is missing")));
     }
 
     public Mono<Either<String, Account>> withdraw(
             String account, BigDecimal amount) {
-        return eventProcessor.processCommand(new BankCommand.Withdraw(account, amount))
+        return eventProcessor.processCommand(new AccountCommand.Withdraw(account, amount))
                 .map(res -> res.flatMap(processingResult -> processingResult.currentState.toEither("Current state is missing")));
     }
 
     public Mono<Either<String, Account>> deposit(
             String account, BigDecimal amount) {
-        return eventProcessor.processCommand(new BankCommand.Deposit(account, amount))
+        return eventProcessor.processCommand(new AccountCommand.Deposit(account, amount))
                 .map(res -> res.flatMap(processingResult -> processingResult.currentState.toEither("Current state is missing")));
     }
 
-    public Mono<Either<String, ProcessingSuccess<Account, BankEvent, Tuple0, Tuple0, Tuple0>>> close(
+    public Mono<Either<String, ProcessingSuccess<Account, AccountEvent, Tuple0, Tuple0, Tuple0>>> close(
             String account) {
-        return eventProcessor.processCommand(new BankCommand.CloseAccount(account));
+        return eventProcessor.processCommand(new AccountCommand.CloseAccount(account));
     }
 
     public Mono<Option<Account>> findAccountById(String id) {

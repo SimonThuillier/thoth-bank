@@ -1,5 +1,6 @@
-package com.bts.thoth.bank.core;
+package com.bts.thoth.bank.projections;
 
+import com.bts.thoth.bank.account.AccountEvent;
 import fr.maif.eventsourcing.EventEnvelope;
 import fr.maif.eventsourcing.ReactorProjection;
 import fr.maif.jooq.reactor.PgAsyncPool;
@@ -18,7 +19,7 @@ import static org.jooq.impl.DSL.val;
 /**
  * this class defines the synchronized projection of mean withdraw (insert of update of accounts with their current state)
  */
-public class WithdrawByMonthProjection implements ReactorProjection<PgAsyncTransaction, BankEvent, Tuple0, Tuple0> {
+public class WithdrawByMonthProjection implements ReactorProjection<PgAsyncTransaction, AccountEvent, Tuple0, Tuple0> {
 
     private final PgAsyncPool pgAsyncPool;
 
@@ -30,7 +31,7 @@ public class WithdrawByMonthProjection implements ReactorProjection<PgAsyncTrans
     }
 
     @Override
-    public Mono<Tuple0> storeProjection(PgAsyncTransaction connection, List<EventEnvelope<BankEvent, Tuple0, Tuple0>> envelopes) {
+    public Mono<Tuple0> storeProjection(PgAsyncTransaction connection, List<EventEnvelope<AccountEvent, Tuple0, Tuple0>> envelopes) {
         // warning : during execution connection injected by EventProcessorImpl is the one used by event store
         // projection should use its own connection for the most part of cases
         return this.pgAsyncPool.executeBatchMono(dsl ->
@@ -38,7 +39,7 @@ public class WithdrawByMonthProjection implements ReactorProjection<PgAsyncTrans
                         // Keep only MoneyWithdrawn events
                         .collect(unlift(eventEnvelope ->
                                 switch (eventEnvelope.event) {
-                                    case BankEvent.MoneyWithdrawn e -> Some(Tuple(eventEnvelope, e));
+                                    case AccountEvent.MoneyWithdrawn e -> Some(Tuple(eventEnvelope, e));
                                     default -> None();
                                 }
                         ))
@@ -145,18 +146,21 @@ public class WithdrawByMonthProjection implements ReactorProjection<PgAsyncTrans
                         END;
                         $$;"""))
                 )
+                .onErrorReturn(1)
                 .flatMap(__ ->
                         pgAsyncPool.executeMono(dsl -> dsl.query("""
                         CREATE TRIGGER on_update BEFORE UPDATE
                             ON <targetTable> FOR EACH ROW
                         EXECUTE FUNCTION on_update_f();""".replaceAll("<targetTable>", targetTable)))
                         )
+                .onErrorReturn(1)
                 .flatMap(__ ->
                         pgAsyncPool.executeMono(dsl -> dsl.query("""
                         CREATE TRIGGER on_insert BEFORE INSERT
                         ON <targetTable> FOR EACH ROW
                         EXECUTE FUNCTION on_insert_f();""".replaceAll("<targetTable>", targetTable)))
-                );
+                )
+                .onErrorReturn(1);
     }
 
     public Mono<Integer> drop(){
