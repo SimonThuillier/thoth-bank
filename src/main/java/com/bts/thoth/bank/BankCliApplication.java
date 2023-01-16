@@ -19,7 +19,7 @@ public class BankCliApplication {
     public static void main(String[] args) throws InterruptedException {
 
         ApplicationContext context = new AnnotationConfigApplicationContext(
-                "com.bts.thoth.bank", "com.bts.thoth.bank.config");
+                "com.bts.thoth.bank", "com.bts.thoth.bank.config", "com.bts.thoth.bank.repository");
 
         Bank bank = context.getBean(Bank.class);
 
@@ -33,7 +33,6 @@ public class BankCliApplication {
         }).subscribe();
 
         myLatch.await();
-        println("mpm");
         context.getBean(BankCliRunner.class).run();
     }
 }

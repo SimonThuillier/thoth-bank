@@ -1,5 +1,7 @@
-package com.bts.thoth.bank.account;
+package com.bts.thoth.bank;
 
+import com.bts.thoth.bank.account.AccountEvent;
+import com.bts.thoth.bank.account.AccountEventEnvelopeParser;
 import com.bts.thoth.bank.config.EventStoreDataSourceConfig;
 import com.bts.thoth.bank.config.KafkaConfig;
 import com.bts.thoth.bank.config.ProjectionDataSourceConfig;

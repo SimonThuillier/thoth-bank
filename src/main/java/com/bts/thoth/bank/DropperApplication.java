@@ -3,6 +3,8 @@ package com.bts.thoth.bank;
 import com.bts.thoth.bank.config.EventStoreDataSourceConfig;
 import com.bts.thoth.bank.config.KafkaConfig;
 import com.bts.thoth.bank.config.ProjectionDataSourceConfig;
+import com.bts.thoth.bank.projections.AccountProjection;
+import com.bts.thoth.bank.projections.BalanceHistoryProjection;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.CommonClientConfigs;
 import com.bts.thoth.bank.projections.AsyncWithdrawByMonthProjection;
@@ -67,6 +69,8 @@ public class DropperApplication {
 
         (new AsyncWithdrawByMonthProjection(pgAsyncProjectionBasePool)).drop().subscribe();
         (new WithdrawByMonthProjection(pgAsyncProjectionBasePool)).drop().subscribe();
+        (new AccountProjection(pgAsyncProjectionBasePool)).drop().subscribe();
+        (new BalanceHistoryProjection(pgAsyncProjectionBasePool)).drop().subscribe();
     }
 
     /**

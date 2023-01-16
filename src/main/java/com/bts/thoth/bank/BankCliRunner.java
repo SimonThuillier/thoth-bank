@@ -1,13 +1,13 @@
 package com.bts.thoth.bank;
 
 import com.bts.thoth.bank.account.Account;
+import com.bts.thoth.bank.repository.AccountHistoryRepository;
+import com.bts.thoth.bank.repository.AccountRepository;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
 import io.vavr.control.Option;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.SpringApplication;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -15,17 +15,19 @@ import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Scanner;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static io.vavr.API.print;
 import static io.vavr.API.println;
 import static java.lang.Thread.sleep;
-
-import com.bts.thoth.bank.Bank;
 
 @Component
 public class BankCliRunner implements CommandLineRunner {
@@ -40,7 +42,13 @@ public class BankCliRunner implements CommandLineRunner {
             Type a number to select an action :\s
             1 - create new account
             2 - set account for action / consultation
-            3 - exit app""";
+            3 - get one account information
+            4 - get one account history
+            5 - find last opened accounts
+            6 - find first opened accounts
+            7 - find last closed accounts
+            8 - find first closed accounts
+            9 - exit app""";
 
     private static final String inAccountText =  """
             (Account <account.id> selected)\s
@@ -66,8 +74,17 @@ public class BankCliRunner implements CommandLineRunner {
 
     private Bank bank;
 
-    public BankCliRunner(Bank bank) {
+    private AccountRepository accountRepository;
+
+    private AccountHistoryRepository accountHistoryRepository;
+
+    public BankCliRunner(Bank bank,
+                         AccountRepository accountRepository,
+                         AccountHistoryRepository accountHistoryRepository) {
+
         this.bank = bank;
+        this.accountRepository = accountRepository;
+        this.accountHistoryRepository = accountHistoryRepository;
     }
 
     @Override
@@ -92,12 +109,12 @@ public class BankCliRunner implements CommandLineRunner {
         System.out.println(menuText);
         Scanner sc= new Scanner(System.in);
         String input;
-        Pattern actionPattern = Pattern.compile("^([1-3])$");
+        Pattern actionPattern = Pattern.compile("^([1-9])$");
         Matcher actionMatcher;
 
         int accountMenuAction;
 
-        while (selectedAction != 3){
+        while (selectedAction != 9){
             if(selectedAction != -1){
                 System.out.print("Type a choice and enter to validate: ");
             }
@@ -130,7 +147,7 @@ public class BankCliRunner implements CommandLineRunner {
                         accountMenuAction = this.runAccountMenu();
                         if(accountMenuAction == 7){
                             // since in account menu action user chose to exit the application
-                            selectedAction = 3;
+                            selectedAction = 9;
                             break;
                         }
                         System.out.println("--> back to main menu -->");
@@ -141,6 +158,36 @@ public class BankCliRunner implements CommandLineRunner {
                     selectedAction = 0;
                     break;
                 case 3:
+                    this.getOneAccountInfo();
+                    selectedAction = 0;
+                    System.out.println(menuText);
+                    break;
+                case 4:
+                    this.getOneAccountHistory();
+                    selectedAction = 0;
+                    System.out.println(menuText);
+                    break;
+                case 5:
+                    this.findAccounts("OPEN", "DESC");
+                    selectedAction = 0;
+                    System.out.println(menuText);
+                    break;
+                case 6:
+                    this.findAccounts("OPEN", "ASC");
+                    selectedAction = 0;
+                    System.out.println(menuText);
+                    break;
+                case 7:
+                    this.findAccounts("CLOSED", "DESC");
+                    selectedAction = 0;
+                    System.out.println(menuText);
+                    break;
+                case 8:
+                    this.findAccounts("CLOSED", "ASC");
+                    selectedAction = 0;
+                    System.out.println(menuText);
+                    break;
+                case 9:
                     // main menu loop will exit
                     break;
                 case -1:
@@ -199,12 +246,12 @@ public class BankCliRunner implements CommandLineRunner {
                     System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
                     break;
                 case 3:
-                    this.getAccountInfo();
+                    this.getSelectedAccountInfo();
                     selectedAction = 0;
                     System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
                     break;
                 case 4:
-                    // TODO get history
+                    this.getSelectedAccountHistory();
                     selectedAction = 0;
                     System.out.println(inAccountText.replaceFirst("<account.id>", selectedAccountId.get()));
                     break;
@@ -395,7 +442,124 @@ public class BankCliRunner implements CommandLineRunner {
         while(!task.isDisposed()){try {sleep(50l);} catch (InterruptedException e) {}}
     }
 
-    private void getAccountInfo(){
+    private boolean getOneAccountInfo(){
+        System.out.print("Type id of the account you want to consult or 'cancel': ");
+        Option<String> response = requestChoicesOrCancel(Option.none());
+        if(response.isEmpty()){return false;} // action was cancelled
+        getAccountInfo(response.get());
+        return true;
+    }
+
+    private void getSelectedAccountInfo(){
+        getAccountInfo(selectedAccountId.get());
+    }
+
+    private void getAccountInfo(String accountId){
+
+        println("Getting account info...");
+        CountDownLatch myLatch = new CountDownLatch(1);
+
+        accountRepository.getById(accountId)
+                .subscribe(
+                        msg -> {
+                            println(msg);
+                            myLatch.countDown();
+                        },
+                        error -> {
+                            println("ERROR : " + error);
+                            myLatch.countDown();
+                        }
+                );
+
+        try {
+            myLatch.await(3000L, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private boolean getOneAccountHistory(){
+        System.out.print("Type id of the account you want to consult or 'cancel': ");
+        Option<String> response = requestChoicesOrCancel(Option.none());
+        if(response.isEmpty()){return false;} // action was cancelled
+        getAccountHistory(response.get());
+        return true;
+    }
+
+    private boolean getSelectedAccountHistory(){
+        return getAccountHistory(selectedAccountId.get());
+    }
+
+    private boolean getAccountHistory(String accountId){
+
+        print("Type maximum history items number to retrieve or 'cancel': ");
+        Option<BigDecimal> response = requestPositiveAmountOrCancel();
+        if(response.isEmpty()){return false;} // action was cancelled
+        Integer count = response.get().setScale(0, RoundingMode.HALF_UP).intValueExact();
+
+        println("Getting account history...");
+        CountDownLatch myLatch = new CountDownLatch(1);
+
+        accountHistoryRepository.getHistoryByAccountId(accountId, count)
+                .subscribe(
+                        msg -> {
+                            println(msg);
+                            myLatch.countDown();
+                        },
+                        error -> {
+                            println("ERROR : " + error);
+                            myLatch.countDown();
+                        }
+                );
+
+        try {
+            myLatch.await(3000L, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        return true;
+    }
+
+
+
+
+    private boolean findAccounts(String status, String sense){
+
+        print("Type the number of accounts to search or 'cancel': ");
+        Option<BigDecimal> response = requestPositiveAmountOrCancel();
+        if(response.isEmpty()){return false;} // action was cancelled
+        Integer count = response.get().setScale(0, RoundingMode.HALF_UP).intValueExact();
+
+        String message = "Getting " + count + " "
+                + (Objects.equals(sense, "DESC") ?"last":"first")
+                + " " + (Objects.equals(status, "OPEN") ? "open":"closed") + " accounts...";
+
+        println(message);
+        CountDownLatch myLatch = new CountDownLatch(1);
+
+        accountRepository.findAccountIds(status, sense, count)
+                .subscribe(
+                        msg -> {
+                            println(msg);
+                            myLatch.countDown();
+                        },
+                        error -> {
+                            println("ERROR : " + error);
+                            myLatch.countDown();
+                        }
+                );
+
+        try {
+            myLatch.await(3000L, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void deprecatedAccountInfo(){
 
         Disposable task = Mono.
                 from(Flux.range(0, 1))
@@ -420,7 +584,7 @@ public class BankCliRunner implements CommandLineRunner {
                                     return null;
                                 }
                         )
-                        )
+                )
                 .doOnError(Throwable::printStackTrace)
                 .subscribe();
 
@@ -434,7 +598,7 @@ public class BankCliRunner implements CommandLineRunner {
         Option<String> response = requestChoicesOrCancel(Option.some(List.of("yes")));
         if(response.isEmpty()){return false;} // action was cancelled
 
-        System.out.print("Closing..");
+        System.out.print("Closing account...");
 
         // since lambda in generate should not update outer-scope objects to prevent side effects
         // we will put validation var in the hashmap behind and update it in lambda

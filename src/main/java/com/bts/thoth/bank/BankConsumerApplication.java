@@ -1,7 +1,6 @@
 package com.bts.thoth.bank;
 
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import com.bts.thoth.bank.account.*;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 

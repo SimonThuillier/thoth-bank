@@ -8,6 +8,8 @@ import com.bts.thoth.bank.account.*;
 import com.bts.thoth.bank.config.EventStoreDataSourceConfig;
 import com.bts.thoth.bank.config.KafkaConfig;
 import com.bts.thoth.bank.config.ProjectionDataSourceConfig;
+import com.bts.thoth.bank.projections.AccountProjection;
+import com.bts.thoth.bank.projections.BalanceHistoryProjection;
 import com.bts.thoth.bank.projections.WithdrawByMonthProjection;
 import fr.maif.eventsourcing.*;
 import com.fasterxml.uuid.Generators;
@@ -87,6 +89,8 @@ public class Bank implements Closeable {
     private PgPool projectionPgPool;
     private final ReactorEventProcessor<String, Account, AccountCommand, AccountEvent, PgAsyncTransaction, Tuple0, Tuple0, Tuple0> eventProcessor;
     private final WithdrawByMonthProjection withdrawByMonthProjection;
+    private final AccountProjection accountProjection;
+    private final BalanceHistoryProjection balanceHistoryProjection;
 
     public Bank(
             ApplicationContext applicationContext,
@@ -101,6 +105,8 @@ public class Bank implements Closeable {
         this.pgAsyncPool = pgAsyncPool(vertx);
         this.projectionPgAsyncPool = projectionPgAsyncPool(vertx);
         this.withdrawByMonthProjection = new WithdrawByMonthProjection(projectionPgAsyncPool);
+        this.accountProjection = new AccountProjection(projectionPgAsyncPool);
+        this.balanceHistoryProjection = new BalanceHistoryProjection(projectionPgAsyncPool);
 
         this.eventProcessor = ReactiveEventProcessor
                 .withPgAsyncPool(pgAsyncPool)
@@ -115,7 +121,7 @@ public class Bank implements Closeable {
                 .withEventHandler(eventHandler)
                 .withDefaultAggregateStore()
                 .withCommandHandler(commandHandler)
-                .withProjections(this.withdrawByMonthProjection)
+                .withProjections(this.accountProjection, this.withdrawByMonthProjection, this.balanceHistoryProjection)
                 .build();
     }
 
@@ -130,6 +136,8 @@ public class Bank implements Closeable {
                     e.printStackTrace();
                 })
                 .flatMap(__ -> withdrawByMonthProjection.init())
+                .flatMap(__ -> accountProjection.init())
+                .flatMap(__ -> balanceHistoryProjection.init())
                 .thenReturn(Tuple.empty());
     }
 
