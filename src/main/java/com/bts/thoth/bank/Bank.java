@@ -211,13 +211,15 @@ public class Bank implements Closeable {
     public Mono<Either<String, Account>> withdraw(
             String account, BigDecimal amount) {
         return eventProcessor.processCommand(new AccountCommand.Withdraw(account, amount))
-                .map(res -> res.flatMap(processingResult -> processingResult.currentState.toEither("Current state is missing")));
+                .map(res ->
+                        res.flatMap(processingResult -> processingResult.currentState.toEither("Current state is missing")));
     }
 
     public Mono<Either<String, Account>> deposit(
             String account, BigDecimal amount) {
         return eventProcessor.processCommand(new AccountCommand.Deposit(account, amount))
-                .map(res -> res.flatMap(processingResult -> processingResult.currentState.toEither("Current state is missing")));
+                .map(res ->
+                        res.flatMap(processingResult -> processingResult.currentState.toEither("Current state is missing")));
     }
 
     public Mono<Either<String, ProcessingSuccess<Account, AccountEvent, Tuple0, Tuple0, Tuple0>>> close(

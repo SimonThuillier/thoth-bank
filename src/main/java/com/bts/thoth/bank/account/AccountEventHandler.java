@@ -43,6 +43,7 @@ public class AccountEventHandler implements EventHandler<Account, AccountEvent> 
         Account account = new Account();
         account.id = event.accountId();
         account.balance = BigDecimal.ZERO;
+        account.status = "OPEN";
 
         return Option.some(account);
     }

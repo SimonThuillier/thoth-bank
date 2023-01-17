@@ -58,7 +58,7 @@ public class AccountCommandHandler implements ReactorCommandHandler<String, Acco
             CloseAccount close) {
 
         if(previousState.isEmpty()) {
-            return Left("This account doesn't exist.");
+            return Left("This account doesn't exist or is already closed.");
         }
 
         LoggerFactory.getLogger("Account").info("Handling account " + close.id() + " closing.");
@@ -74,7 +74,7 @@ public class AccountCommandHandler implements ReactorCommandHandler<String, Acco
             Option<Account> previousState,
             Deposit deposit) {
         LoggerFactory.getLogger("Account").info("Handling account " + deposit.account() + " " + deposit.amount() + "$ money deposit.");
-        return previousState.toEither("Account does not exist")
+        return previousState.toEither("Account does not exist or is closed.")
                 .map(account -> Events.events(new AccountEvent.MoneyDeposited(deposit.account(), deposit.amount())));
     }
 
@@ -82,7 +82,7 @@ public class AccountCommandHandler implements ReactorCommandHandler<String, Acco
             Option<Account> previousState,
             Withdraw withdraw) {
         LoggerFactory.getLogger("Account").info("Handling account " + withdraw.account() + " " + withdraw.amount() + "$ money withdraw.");
-        return previousState.toEither("Account does not exist")
+        return previousState.toEither("Account does not exist or is closed.")
                 .flatMap(previous -> {
                     BigDecimal newBalance = previous.balance.subtract(withdraw.amount());
                     if(newBalance.compareTo(BigDecimal.ZERO) < 0) {

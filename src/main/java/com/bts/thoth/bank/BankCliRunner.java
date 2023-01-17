@@ -332,16 +332,24 @@ public class BankCliRunner implements CommandLineRunner {
         CountDownLatch myLatch = new CountDownLatch(1);
         Mono.from(Flux.range(0, 1))
                 .flatMap(__ -> bank.deposit(selectedAccountId.get(), finalDeposit))
-                .doOnError(error -> {
-                    println("ERROR : " + error);
-                    myLatch.countDown();
-                })
-                .doOnTerminate(() -> {
-                    println("successfully done !");
-                    printWithSeparation(finalDeposit + " deposited on account " + selectedAccountId.get() + ".");
-                    myLatch.countDown();
-                })
-                .subscribe();
+                .flatMap(errorOrState ->
+                         errorOrState
+                                .fold(
+                                        (e) -> {
+                                            println("ERROR : " + e);
+                                            return Mono.from(Flux.range(0, 1));
+                                        },
+                                        account -> {
+                                            println("successfully done !");
+                                            printWithSeparation(finalDeposit + " deposited on account " + selectedAccountId.get() + ". New balance is: " + account.getBalance());
+                                            return Mono.from(Flux.range(0, 1));
+                                        }
+                                )
+                )
+                .subscribe(
+                        __ -> myLatch.countDown(),
+                        error -> myLatch.countDown()
+                );
         try {myLatch.await(TIMEOUT, TimeUnit.MILLISECONDS);} catch (InterruptedException ignored) {}
     }
 
@@ -367,7 +375,7 @@ public class BankCliRunner implements CommandLineRunner {
                                         },
                                         account -> {
                                             println("successfully done !");
-                                            printWithSeparation("New balance is: " + account.getBalance());
+                                            printWithSeparation(finalWithdraw + " withdrawn from account " + selectedAccountId.get() + ". New balance is: " + account.getBalance());
                                             return Mono.from(Flux.range(0, 1));
                                         }
                                 )
@@ -546,17 +554,24 @@ public class BankCliRunner implements CommandLineRunner {
         CountDownLatch myLatch = new CountDownLatch(1);
         Mono.from(Flux.range(0, 1))
                 .flatMap(__ -> bank.close(selectedAccountId.get()))
+                .flatMap(errorOrState ->
+                        errorOrState
+                                .fold(
+                                        (e) -> {
+                                            println("ERROR : " + e);
+                                            return Mono.just(1);
+                                        },
+                                        account -> {
+                                            println("successfully done !");
+                                            resultStorage.put("accountClosed", true);
+                                            printWithSeparation("Account " + selectedAccountId.get() + " was closed.");
+                                            return Mono.from(Flux.range(0, 1));
+                                        }
+                                )
+                )
                 .subscribe(
-                        msg -> {
-                            println("successfully done !");
-                            resultStorage.put("accountClosed", true);
-                            printWithSeparation("Account " + selectedAccountId.get() + " was closed.");
-                            myLatch.countDown();
-                        },
-                        error -> {
-                            println("ERROR : " + error);
-                            myLatch.countDown();
-                        }
+                        __ -> myLatch.countDown(),
+                        error -> myLatch.countDown()
                 );
         try {myLatch.await(TIMEOUT, TimeUnit.MILLISECONDS);} catch (InterruptedException e) {return false;}
         return resultStorage.containsKey("accountClosed");
