@@ -47,7 +47,7 @@ public class AccountRepository {
         return pgAsyncPool.queryMono(dsl -> dsl
                 .resultQuery(
                         """
-                            select id, balance::VARCHAR, status, creation_date, closing_date from account where id = {0}
+                            select id, balance::DECIMAL, status, creation_date, closing_date from account where id = {0}
                             """, val(accountId)
                 )
         ).map(r -> {
@@ -56,14 +56,16 @@ public class AccountRepository {
             }
 
             if(r.get(0).get("status", String.class).equals("OPEN")) {
-                return r.get(0).get("id", String.class)
-                        + " with current balance of " + r.get(0).get("balance", String.class)
+                return "Account "
+                        + r.get(0).get("id", String.class)
+                        + " of current balance=" + r.get(0).get("balance", String.class)
                         + " " + r.get(0).get("status", String.class)
                         + " since " + r.get(0).get("creation_date", Date.class);
             }
 
-            return r.get(0).get("id", String.class) + " "
-                    + r.get(0).get("balance", BigDecimal.class)
+            return "Account "
+                    + r.get(0).get("id", String.class)
+                    + " of residual balance " + r.get(0).get("balance", BigDecimal.class)
                     + " open on " + r.get(0).get("creation_date", Date.class)
                     + " and " + r.get(0).get("status", String.class)
                     + " on " + r.get(0).get("closing_date", Date.class);
