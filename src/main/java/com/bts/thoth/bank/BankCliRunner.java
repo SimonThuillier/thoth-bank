@@ -500,7 +500,7 @@ public class BankCliRunner implements CommandLineRunner {
         println("Getting account history...");
         CountDownLatch myLatch = new CountDownLatch(1);
 
-        accountHistoryRepository.getHistoryByAccountId(accountId, count)
+        accountHistoryRepository.getHistoryByAccountId2(accountId, count)
                 .subscribe(
                         msg -> {
                             println(msg);
