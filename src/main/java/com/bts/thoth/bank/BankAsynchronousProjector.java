@@ -5,8 +5,7 @@ import com.bts.thoth.bank.account.AccountEventEnvelopeParser;
 import com.bts.thoth.bank.config.EventStoreDataSourceConfig;
 import com.bts.thoth.bank.config.KafkaConfig;
 import com.bts.thoth.bank.config.ProjectionDataSourceConfig;
-import com.bts.thoth.bank.projections.AsyncWithdrawByMonthProjection;
-import com.bts.thoth.bank.projections.WithdrawByMonthProjection;
+import com.bts.thoth.bank.projections.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.uuid.Generators;
@@ -44,7 +43,11 @@ public class BankAsynchronousProjector {
     private static PgPool pgPool;
     private static final Vertx vertx = Vertx.vertx();
     private static PgAsyncPool pgProjectionPool;
-    private static WithdrawByMonthProjection withdrawByMonthProjection;
+
+    private final AsyncAccountProjection accountProjection;
+    private final AsyncBalanceHistoryProjection balanceHistoryProjection;
+    private final AsyncFinancialFluxProjection financialFluxProjection;
+    private static AsyncWithdrawByMonthProjection withdrawByMonthProjection;
 
     private static ReceiverOptions<String, String> receiverOptions;
 
@@ -68,6 +71,12 @@ public class BankAsynchronousProjector {
         pgPool = PgPool.pool(vertx, options, poolOptions);
         pgProjectionPool = PgAsyncPool.create(pgPool, jooqConfig);
 
+        accountProjection = new AsyncAccountProjection(pgProjectionPool);
+        accountProjection.init().subscribe();
+        balanceHistoryProjection = new AsyncBalanceHistoryProjection(pgProjectionPool);
+        balanceHistoryProjection.init().subscribe();
+        financialFluxProjection = new AsyncFinancialFluxProjection(pgProjectionPool);
+        financialFluxProjection.init().subscribe();
         withdrawByMonthProjection = new AsyncWithdrawByMonthProjection(pgProjectionPool);
         withdrawByMonthProjection.init().subscribe();
 
@@ -85,7 +94,7 @@ public class BankAsynchronousProjector {
                 "ThothBankConsumer-" + UUIDgenerator.generate(),
                 ResilientKafkaConsumer.Config.create(
                         java.util.List.of(kafkaConfig.getTopic()),
-                        "ThothBankConsumer-lol10",
+                        "ThothBankConsumer-1",
                         receiverOptions
                 ),
                 this::kafkaEventPipeline
@@ -119,7 +128,14 @@ public class BankAsynchronousProjector {
                             .filter(Either::isRight)
                             .map(Either::get)
                             .log()
-                            .flatMap(parsedEvent -> withdrawByMonthProjection.storeProjection(transaction, List.of(parsedEvent)))
+                            .flatMap(parsedEvent -> {
+                                return Mono.zip(
+                                        accountProjection.storeProjection(transaction, List.of(parsedEvent)),
+                                        balanceHistoryProjection.storeProjection(transaction, List.of(parsedEvent)),
+                                        financialFluxProjection.storeProjection(transaction, List.of(parsedEvent)),
+                                        withdrawByMonthProjection.storeProjection(transaction, List.of(parsedEvent))
+                                );
+                            })
                             )
                             .subscribe();
                 });

@@ -3,12 +3,9 @@ package com.bts.thoth.bank;
 import com.bts.thoth.bank.config.EventStoreDataSourceConfig;
 import com.bts.thoth.bank.config.KafkaConfig;
 import com.bts.thoth.bank.config.ProjectionDataSourceConfig;
-import com.bts.thoth.bank.projections.AccountProjection;
-import com.bts.thoth.bank.projections.BalanceHistoryProjection;
+import com.bts.thoth.bank.projections.*;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.CommonClientConfigs;
-import com.bts.thoth.bank.projections.AsyncWithdrawByMonthProjection;
-import com.bts.thoth.bank.projections.WithdrawByMonthProjection;
 import fr.maif.jooq.reactor.PgAsyncPool;
 import io.vertx.core.Vertx;
 import io.vertx.pgclient.PgConnectOptions;
@@ -54,7 +51,6 @@ public class DropperApplication {
         DefaultConfiguration jooqConfig = new DefaultConfiguration();
         jooqConfig.setSQLDialect(SQLDialect.POSTGRES);
 
-
         ProjectionDataSourceConfig projectionDataSourceConfig = context.getBean(ProjectionDataSourceConfig.class);
 
         PgConnectOptions options = new PgConnectOptions()
@@ -67,10 +63,14 @@ public class DropperApplication {
         PgPool pgProjectionBasePool = PgPool.pool(vertx, options, poolOptions);
         PgAsyncPool pgAsyncProjectionBasePool = PgAsyncPool.create(pgProjectionBasePool, jooqConfig);
 
-        (new AsyncWithdrawByMonthProjection(pgAsyncProjectionBasePool)).drop().subscribe();
-        (new WithdrawByMonthProjection(pgAsyncProjectionBasePool)).drop().subscribe();
         (new AccountProjection(pgAsyncProjectionBasePool)).drop().subscribe();
+        (new AsyncAccountProjection(pgAsyncProjectionBasePool)).drop().subscribe();
         (new BalanceHistoryProjection(pgAsyncProjectionBasePool)).drop().subscribe();
+        (new AsyncBalanceHistoryProjection(pgAsyncProjectionBasePool)).drop().subscribe();
+        (new FinancialFluxProjection(pgAsyncProjectionBasePool)).drop().subscribe();
+        (new AsyncFinancialFluxProjection(pgAsyncProjectionBasePool)).drop().subscribe();
+        (new WithdrawByMonthProjection(pgAsyncProjectionBasePool)).drop().subscribe();
+        (new AsyncWithdrawByMonthProjection(pgAsyncProjectionBasePool)).drop().subscribe();
     }
 
     /**

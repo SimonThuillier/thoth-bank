@@ -10,6 +10,7 @@ import com.bts.thoth.bank.config.KafkaConfig;
 import com.bts.thoth.bank.config.ProjectionDataSourceConfig;
 import com.bts.thoth.bank.projections.AccountProjection;
 import com.bts.thoth.bank.projections.BalanceHistoryProjection;
+import com.bts.thoth.bank.projections.FinancialFluxProjection;
 import com.bts.thoth.bank.projections.WithdrawByMonthProjection;
 import fr.maif.eventsourcing.*;
 import com.fasterxml.uuid.Generators;
@@ -88,9 +89,10 @@ public class Bank implements Closeable {
     private final PgAsyncPool pgAsyncPool; // event store projection
     private PgPool projectionPgPool;
     private final ReactorEventProcessor<String, Account, AccountCommand, AccountEvent, PgAsyncTransaction, Tuple0, Tuple0, Tuple0> eventProcessor;
-    private final WithdrawByMonthProjection withdrawByMonthProjection;
     private final AccountProjection accountProjection;
     private final BalanceHistoryProjection balanceHistoryProjection;
+    private final FinancialFluxProjection financialFluxProjection;
+    private final WithdrawByMonthProjection withdrawByMonthProjection;
 
     public Bank(
             ApplicationContext applicationContext,
@@ -107,6 +109,7 @@ public class Bank implements Closeable {
         this.withdrawByMonthProjection = new WithdrawByMonthProjection(projectionPgAsyncPool);
         this.accountProjection = new AccountProjection(projectionPgAsyncPool);
         this.balanceHistoryProjection = new BalanceHistoryProjection(projectionPgAsyncPool);
+        this.financialFluxProjection = new FinancialFluxProjection(projectionPgAsyncPool);
 
         this.eventProcessor = ReactiveEventProcessor
                 .withPgAsyncPool(pgAsyncPool)
@@ -121,13 +124,18 @@ public class Bank implements Closeable {
                 .withEventHandler(eventHandler)
                 .withDefaultAggregateStore()
                 .withCommandHandler(commandHandler)
-                .withProjections(this.accountProjection, this.withdrawByMonthProjection, this.balanceHistoryProjection)
+                .withProjections(
+                        this.accountProjection
+                        //this.withdrawByMonthProjection,
+                        //this.balanceHistoryProjection,
+                        //this.financialFluxProjection
+                )
                 .build();
     }
 
     public Mono<Tuple0> init() {
         LoggerFactory.getLogger("Bank").info("Initializing database");
-        return Flux.fromIterable(List(accountTable, bankJournalTable, SEQUENCE))
+        return Flux.fromIterable(List(bankJournalTable, SEQUENCE))
                 .concatMap(script -> pgAsyncPool.executeMono(d -> d.query(script)))
                 .collectList()
                 .doOnSuccess(__ -> LoggerFactory.getLogger("Bank").info("Database initialized"))
@@ -135,9 +143,10 @@ public class Bank implements Closeable {
                     LoggerFactory.getLogger("Bank").error("Database initialization failed");
                     e.printStackTrace();
                 })
-                .flatMap(__ -> withdrawByMonthProjection.init())
                 .flatMap(__ -> accountProjection.init())
-                .flatMap(__ -> balanceHistoryProjection.init())
+//                .flatMap(__ -> balanceHistoryProjection.init())
+//                .flatMap(__ -> financialFluxProjection.init())
+//                .flatMap(__ -> withdrawByMonthProjection.init())
                 .thenReturn(Tuple.empty());
     }
 

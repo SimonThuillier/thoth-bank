@@ -127,7 +127,7 @@ public class AccountHistoryRepository {
         Mono<List<QueryResult>> projectionRecordMono = pgAsyncPool.queryMono(dsl -> dsl
                 .resultQuery(
                         """
-                            select event_id, balance::DECIMAL from balance_history where account_id={0} order by sequence_num desc limit {1};
+                            select event_id, balance::DECIMAL from async_balance_history where account_id={0} order by sequence_num desc limit {1};
                             """, val(accountId), val(limit)
                 )
         );

@@ -56,7 +56,7 @@ public class BalanceHistoryProjection implements ReactorProjection<PgAsyncTransa
                                                 insert into <targetTable> (event_id, account_id, sequence_num, balance, emission_date) 
                                                 select {0}, {1}, <sequence_num>,
                                                 (select balance
-                                                from balance_history
+                                                from <targetTable>
                                                 where account_id={1}
                                                 order by sequence_num desc limit 1) + <amount>::money
                                                 , {3}
@@ -74,7 +74,7 @@ public class BalanceHistoryProjection implements ReactorProjection<PgAsyncTransa
                                                 insert into <targetTable> (event_id, account_id, sequence_num, balance, emission_date) 
                                                 select {0}, {1}, <sequence_num>,
                                                 (select balance
-                                                from balance_history
+                                                from <targetTable>
                                                 where account_id={1}
                                                 order by sequence_num desc limit 1) - <amount>::money
                                                 , {3}
