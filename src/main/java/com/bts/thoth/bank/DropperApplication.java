@@ -22,6 +22,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import static io.vavr.API.print;
+import static io.vavr.API.println;
+
 @SpringBootApplication
 public class DropperApplication {
     private static final Vertx vertx = Vertx.vertx();
@@ -38,9 +41,15 @@ public class DropperApplication {
         context = new AnnotationConfigApplicationContext(
                 "com.bts.thoth.bank", "com.bts.thoth.bank.config");
 
+        print("Dropping projection tables...");
         dropProjections();
+        print("done.");
+        print("Dropping kafka topics...");
         dropKafkaEvents();
+        print("done.");
+        print("Dropping event journal...");
         dropEventSources();
+        print("all done.");
     }
 
     /**

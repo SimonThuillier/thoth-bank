@@ -42,7 +42,8 @@ public class BalanceHistoryProjection implements ReactorProjection<PgAsyncTransa
                         .map(t -> {
                             if (t._2 instanceof AccountEvent.AccountOpened) {
                                 return dsl.query("""
-                                                insert into <targetTable> (event_id, account_id, sequence_num, balance, emission_date) values ({0}, {1}, <sequence_num>, 0, {3})
+                                                insert into <targetTable> (event_id, account_id, sequence_num, balance, emission_date) 
+                                                values ({0}, {1}, <sequence_num>, 0, {3})
                                                 on conflict DO NOTHING;"""
                                                 .replaceAll("<targetTable>", targetTable)
                                                 .replaceAll("<sequence_num>", t._1.sequenceNum.toString()),

@@ -1,8 +1,13 @@
 <configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+    <include resource="org/springframework/boot/logging/logback/file-appender.xml" />
+    <property resource="app-config.properties" />
+    <property name="_LOG_FILE" value="${logging.file.path}/BankLogger.log}"/>
+
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>/home/simon/projects/kafka/thoth-bank/logs/BankLogger.log</file>
+        <file>${_LOG_FILE}</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>/home/simon/projects/kafka/thoth-bank/logs/BankLogger.log.%d{yyyy-MM-dd}</fileNamePattern>
+            <fileNamePattern>${_LOG_FILE}.%d{yyyy-MM-dd}</fileNamePattern>
         </rollingPolicy>
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
@@ -13,8 +18,8 @@
 <!--            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>-->
 <!--        </encoder>-->
 <!--    </appender>-->
-    <root level="INFO">
-<!--        <appender-ref ref="CONSOLE" />-->
+    <root level="DEBUG">
         <appender-ref ref="FILE" />
+        <!--        <appender-ref ref="CONSOLE" />-->
     </root>
 </configuration>

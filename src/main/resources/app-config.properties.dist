@@ -1,17 +1,21 @@
 # app-config.properties template to copy and edit according to your environment
-#
+# custom logging path to use
+logging.file.path=/home/simon/projects/kafka/thoth-bank/logs
+# event store DB connection configuration
 eventStoreDataSource.host=localhost
 eventStoreDataSource.port=5557
 eventStoreDataSource.user=thoth_bank
 eventStoreDataSource.password=thoth_bank
 eventStoreDataSource.database=thoth_bank_event_store
-#
+###
+# projection DB connection configuration
 projectionDataSource.host=localhost
 projectionDataSource.port=5557
 projectionDataSource.user=thoth_bank
 projectionDataSource.password=thoth_bank
 projectionDataSource.database=thoth_bank_projection
-#
+###
+# Kafka cluster connection configuration and topic
 kafka.host=localhost:29092
 kafka.topic=bank
 kafka.callback_topic=bank_callback

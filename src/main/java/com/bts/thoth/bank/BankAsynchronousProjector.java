@@ -67,7 +67,7 @@ public class BankAsynchronousProjector {
                 .setUser(projectionDataSourceConfig.getUser())
                 .setPassword(projectionDataSourceConfig.getPassword())
                 .setDatabase(projectionDataSourceConfig.getDatabase());
-        PoolOptions poolOptions = new PoolOptions().setMaxSize(50);
+        PoolOptions poolOptions = new PoolOptions().setMaxSize(10);
         pgPool = PgPool.pool(vertx, options, poolOptions);
         pgProjectionPool = PgAsyncPool.create(pgPool, jooqConfig);
 
@@ -94,12 +94,11 @@ public class BankAsynchronousProjector {
                 "ThothBankConsumer-" + UUIDgenerator.generate(),
                 ResilientKafkaConsumer.Config.create(
                         java.util.List.of(kafkaConfig.getTopic()),
-                        "ThothBankConsumer-1",
+                        "ThothBankConsumer-4",
                         receiverOptions
                 ),
                 this::kafkaEventPipeline
         );
-
     }
 
     private Flux<ReceiverRecord<String, String>> kafkaEventPipeline(Flux<ReceiverRecord<String, String>> kafkaFlux){
@@ -128,13 +127,12 @@ public class BankAsynchronousProjector {
                             .filter(Either::isRight)
                             .map(Either::get)
                             .log()
-                            .flatMap(parsedEvent -> {
-                                return Mono.zip(
-                                        accountProjection.storeProjection(transaction, List.of(parsedEvent)),
-                                        balanceHistoryProjection.storeProjection(transaction, List.of(parsedEvent)),
-                                        financialFluxProjection.storeProjection(transaction, List.of(parsedEvent)),
-                                        withdrawByMonthProjection.storeProjection(transaction, List.of(parsedEvent))
-                                );
+                            .publishOn(Schedulers.boundedElastic())
+                            .doOnNext(parsedEvent -> {
+                                accountProjection.storeProjection(transaction, List.of(parsedEvent)).subscribe();
+                                balanceHistoryProjection.storeProjection(transaction, List.of(parsedEvent)).subscribe();
+                                financialFluxProjection.storeProjection(transaction, List.of(parsedEvent)).subscribe();
+                                withdrawByMonthProjection.storeProjection(transaction, List.of(parsedEvent)).subscribe();
                             })
                             )
                             .subscribe();
